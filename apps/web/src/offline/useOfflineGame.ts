@@ -1,46 +1,17 @@
 import {
   applyMove, chooseMove, nextSession, seatView, seededRandom, startGame,
-  type Card, type GameConfig, type GameEvent, type GameResult, type GameState,
-  type Move, type Seat, type SessionEndCause,
+  type GameConfig, type GameEvent, type GameResult, type GameState,
+  type Move, type Seat,
 } from '@gaple/aturan';
+import { DURASI } from '@gaple/ruang';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Suara } from '../audio/suara';
-import { DURASI } from '../durasi';
-import type { Presentation, PresentationEvent } from '../presentasi';
+import { dealClicks, wait } from '../jadwal';
+import type { Presentation, PresentationEvent, SessionSummary } from '../presentasi';
 
 export const HUMAN_SEAT: Seat = 0;
 
-export type SessionSummary = {
-  readonly cause: SessionEndCause;
-  readonly hands: readonly (readonly Card[])[];
-  readonly sessionPoints: readonly number[];
-  readonly totals: readonly number[];
-};
-
 const randomSeed = () => Math.floor(Math.random() * 2 ** 32);
-
-function wait(ms: number, signal: AbortSignal): Promise<boolean> {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const finish = (ok: boolean) => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', abort);
-      resolve(ok);
-    };
-    const abort = () => finish(false);
-    const timer = setTimeout(() => finish(true), ms);
-    signal.addEventListener('abort', abort, { once: true });
-  });
-}
-
-function dealClicks(audio: Suara, signal: AbortSignal) {
-  const timers = Array.from({ length: 28 }, (_, i) => setTimeout(() => {
-    if (!signal.aborted) audio.dealClick();
-  }, i * DURASI.jedaBagi));
-  const cancel = () => timers.forEach(clearTimeout);
-  signal.addEventListener('abort', cancel, { once: true });
-  return () => { cancel(); signal.removeEventListener('abort', cancel); };
-}
 
 /** Event mesin dipresentasikan berurutan; input terkunci sampai rangkaian selesai. */
 export function useOfflineGame(audio: Suara) {

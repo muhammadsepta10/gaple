@@ -2,7 +2,7 @@ import { useTick } from '@pixi/react';
 import { Graphics, Text } from 'pixi.js';
 import { useRef } from 'react';
 import type { Seat } from '@gaple/aturan';
-import { DURASI } from '../durasi';
+import { DURASI } from '@gaple/ruang';
 import type { Presentation } from '../presentasi';
 import type { Rect } from './tataLetak';
 

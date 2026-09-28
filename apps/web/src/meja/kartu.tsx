@@ -1,7 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import { useTick } from '@pixi/react';
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { DURASI } from '../durasi';
+import { DURASI } from '@gaple/ruang';
 import { U, type Pose } from './kartuGeometry';
 
 /** Lebar dasar kartu; tinggi 2U. Semua kartu digambar pada ukuran ini lalu diskalakan. */
@@ -45,7 +45,8 @@ type CardProps = {
   dim?: boolean;
   outline?: boolean;
   onTap?: () => void;
-  motion?: { key: number; at: number; from?: Pose; delay?: number; flip?: boolean };
+  /** `origin`: titik awal terbang bila kartu belum pernah tampil (mis. kartu lawan online yang tidak dikenal). */
+  motion?: { key: number; at: number; from?: Pose; origin?: Pose; delay?: number; flip?: boolean };
 };
 
 type Flight = { from: Pose; to: Pose; started: number; delay: number; flip: boolean; revealed: boolean };
@@ -71,7 +72,7 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
     // meninggalkan punggung kartu; `draw` tidak dipanggil ulang karena identitasnya tidak berubah.
     const faceHidden = !!flight.current?.flip && !flight.current.revealed;
     if (motion) {
-      const from = motion.from ?? renderedPose.current ?? pose;
+      const from = motion.from ?? renderedPose.current ?? motion.origin ?? pose;
       flight.current = {
         from,
         to: pose,

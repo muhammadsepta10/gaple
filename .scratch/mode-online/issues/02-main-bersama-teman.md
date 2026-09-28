@@ -32,3 +32,7 @@ Teman bisa bergabung ke **Ruang privat** lewat tautan atau **Kode undangan**, me
 ## Blocked by
 
 - `01-tracer-game-online-lawan-bot.md`
+
+## Comments
+
+- (dari tiket 01) Tata letak `Meja` masih mengandaikan kursi sendiri = 0 di bawah. Di tiket 01 pembuat ruang selalu kursi 0, jadi aman. Begitu teman bisa duduk di kursi 1–3, pengendali online perlu memutar kursi (kursi relatif = (kursi − kursiSaya + 4) mod 4) untuk tangan, susunan, giliran, skor, event, dan info kursi sebelum diteruskan ke `Meja`.

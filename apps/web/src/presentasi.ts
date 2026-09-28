@@ -1,4 +1,4 @@
-import type { Seat } from '@gaple/aturan';
+import type { Card, Seat, SessionEndCause } from '@gaple/aturan';
 
 /** Event visual yang dipakai pengendali offline maupun pengendali online kelak. */
 export type Presentation =
@@ -11,3 +11,11 @@ export type Presentation =
   | { readonly kind: 'champion'; readonly key: number; readonly at: number; readonly seats: readonly Seat[] };
 
 export type PresentationEvent = Presentation extends infer E ? E extends Presentation ? Omit<E, 'key' | 'at'> : never : never;
+
+/** Ringkasan ronde yang tampil di antara ronde. */
+export type SessionSummary = {
+  readonly cause: SessionEndCause;
+  readonly hands: readonly (readonly Card[])[];
+  readonly sessionPoints: readonly number[];
+  readonly totals: readonly number[];
+};

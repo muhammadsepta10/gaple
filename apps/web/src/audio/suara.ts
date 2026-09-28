@@ -1,4 +1,4 @@
-import { DURASI } from '../durasi';
+import { DURASI } from '@gaple/ruang';
 
 const STORAGE_KEY = 'gaple.mute';
 const SAMPLES = [

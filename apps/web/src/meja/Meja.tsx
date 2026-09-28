@@ -2,7 +2,7 @@ import { extend, useTick } from '@pixi/react';
 import { legalMoves, SEATS, type End, type GameState, type Move, type Seat } from '@gaple/aturan';
 import { Container, Graphics, Text } from 'pixi.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DURASI } from '../durasi';
+import { DURASI } from '@gaple/ruang';
 import type { Presentation } from '../presentasi';
 import { BigEffect, ChampionBadge, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
@@ -94,7 +94,12 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
       key={placement.card.id}
       pose={pose}
       face={face}
-      motion={moving ? { key: presentation.key, at: presentation.at, flip: presentation.seat !== humanSeat } : undefined}
+      motion={moving ? {
+        key: presentation.key,
+        at: presentation.at,
+        flip: presentation.seat !== humanSeat,
+        origin: L.back(presentation.seat, session.hands[presentation.seat]!.length),
+      } : undefined}
     />);
   }
   return (

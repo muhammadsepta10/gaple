@@ -8,7 +8,9 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.18.4",
     "@gaple/aturan": "workspace:*",
+    "@gaple/ruang": "workspace:*",
     "@pixi/react": "^8.0.5",
     "pixi.js": "^8.21.0",
     "react": "^19.3.0",

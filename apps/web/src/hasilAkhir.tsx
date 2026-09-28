@@ -13,7 +13,8 @@ export function HasilAkhir({ result, totals, seats, onPlayAgain, onBackToMenu }:
   result: GameResult;
   totals: readonly number[];
   seats: readonly SeatInfo[];
-  onPlayAgain: () => void;
+  /** Tanpa ini tombol "Main lagi" disembunyikan. */
+  onPlayAgain?: () => void;
   onBackToMenu: () => void;
 }) {
   const ranked = rankedFinalSeats(result, totals);
@@ -50,10 +51,10 @@ export function HasilAkhir({ result, totals, seats, onPlayAgain, onBackToMenu }:
           })}
         </ol>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
-          <button style={{ border: 0, borderRadius: 999, padding: '10px 18px', background: '#ffd54a',
+          {onPlayAgain && <button style={{ border: 0, borderRadius: 999, padding: '10px 18px', background: '#ffd54a',
             color: '#3a2a05', font: '700 14px system-ui', cursor: 'pointer' }} onClick={onPlayAgain}>
             Main lagi
-          </button>
+          </button>}
           <button style={{ border: 0, borderRadius: 999, padding: '10px 18px', background: '#35413d',
             color: '#fff', font: '700 14px system-ui', cursor: 'pointer' }} onClick={onBackToMenu}>
             Kembali ke menu

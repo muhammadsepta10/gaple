@@ -1,10 +1,11 @@
-import { Application } from '@pixi/react';
-import { legalMoves, type GameConfig } from '@gaple/aturan';
+import type { GameConfig } from '@gaple/aturan';
 import { useEffect, useState } from 'react';
 import { Suara } from './audio/suara';
-import { GAMBAR_MEJA, gambarMejaAwal, gambarMejaUrl, pilihGambarMeja, type GambarMeja } from './gambarMeja';
-import { HasilAkhir } from './hasilAkhir';
-import { Meja, type SeatInfo } from './meja/Meja';
+import { GAMBAR_MEJA, gambarMejaAwal, pilihGambarMeja, type GambarMeja } from './gambarMeja';
+import { button } from './gaya';
+import { LayarMeja } from './LayarMeja';
+import type { SeatInfo } from './meja/Meja';
+import { LayarOnline } from './online/LayarOnline';
 import { HUMAN_SEAT, useOfflineGame } from './offline/useOfflineGame';
 
 const SEAT_INFO: SeatInfo[] = [
@@ -14,37 +15,7 @@ const SEAT_INFO: SeatInfo[] = [
   { name: 'Joko', bot: true },
 ];
 
-const button: React.CSSProperties = {
-  font: '600 18px system-ui',
-  padding: '12px 28px',
-  borderRadius: 999,
-  border: 0,
-  background: '#ffd54a',
-  color: '#3a2a05',
-  cursor: 'pointer',
-};
-
-const overlay: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  display: 'grid',
-  placeItems: 'center',
-  background: 'rgba(0,0,0,.55)',
-  color: '#fff',
-  fontFamily: 'system-ui',
-};
-
-function useWindowSize() {
-  const [size, setSize] = useState({ w: innerWidth, h: innerHeight });
-  useEffect(() => {
-    const onResize = () => setSize({ w: innerWidth, h: innerHeight });
-    addEventListener('resize', onResize);
-    return () => removeEventListener('resize', onResize);
-  }, []);
-  return size;
-}
-
-function Menu({ initial, onStart, muted, onMute, gambar, onGambar }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void; muted: boolean; onMute: () => void; gambar: GambarMeja; onGambar: (id: GambarMeja) => void }) {
+function Menu({ initial, onStart, onOnline, muted, onMute, gambar, onGambar }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void; onOnline: () => void; muted: boolean; onMute: () => void; gambar: GambarMeja; onGambar: (id: GambarMeja) => void }) {
   const [targetPoints, setTargetPoints] = useState(initial.targetPoints ?? 100);
   const [doubleBalak, setDoubleBalak] = useState(initial.doubleBalak ?? false);
   return (
@@ -83,9 +54,14 @@ function Menu({ initial, onStart, muted, onMute, gambar, onGambar }: { initial: 
             </div>
           </fieldset>
         </div>
-        <button style={button} onClick={() => onStart({ targetPoints, doubleBalak })}>
-          Main offline
-        </button>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button style={button} onClick={() => onStart({ targetPoints, doubleBalak })}>
+            Main offline
+          </button>
+          <button style={{ ...button, background: '#fff', color: '#123e2b' }} onClick={onOnline}>
+            Main online
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -110,122 +86,29 @@ function Table({
   onBackToMenu: () => void;
   gambar: GambarMeja;
 }) {
-  const { w, h } = useWindowSize();
   const [ready, setReady] = useState(false);
-  const { state, presentation, start, play, canAct, summary, gameResult, redealNotice } = useOfflineGame(audio);
+  const game = useOfflineGame(audio);
+  const { start } = game;
   useEffect(() => () => audio.cancelPending(), [audio]);
   // State meja baru diisi setelah kanvas siap (ADR 0001).
   useEffect(() => {
     if (ready) start(config);
   }, [ready, config, start]);
 
-  const askExit = () => {
-    if (confirm('Keluar dari game yang sedang berjalan? Progres game ini akan hilang.')) onExit();
-  };
-
   return (
-    <>
-      <div data-testid="table-background" style={{ position: 'fixed', inset: 0, backgroundColor: GAMBAR_MEJA.find((item) => item.id === gambar)!.color, backgroundImage: `url("${gambarMejaUrl(gambar)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} backgroundAlpha={0} onInit={() => setReady(true)}>
-          {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} presentation={presentation} onMove={play} />}
-        </Application>
-      </div>
-      {state && canAct && (
-        <div role="group" aria-label="Langkah tersedia" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }}>
-          {legalMoves(state).filter((move) => move.seat === HUMAN_SEAT).map((move) => (
-            <button key={`${move.cardId}-${move.end}`} data-testid="legal-move" onClick={() => play(move)}>
-              Pasang {move.cardId} ke {move.end === 'left' ? 'kiri' : 'kanan'}
-            </button>
-          ))}
-        </div>
-      )}
-      <button onClick={onMute} aria-label={muted ? 'Aktifkan suara' : 'Senyapkan suara'} title={muted ? 'Aktifkan suara' : 'Senyapkan suara'}
-        style={{ position: 'fixed', top: 12, right: 12, zIndex: 2, ...button, padding: '8px 14px', fontSize: 18,
-          background: 'rgba(0,0,0,.65)', color: '#fff' }}>
-        {muted ? '🔇' : '🔊'}
-      </button>
-      {!gameResult && (
-        <button
-          onClick={askExit}
-          style={{
-            position: 'fixed',
-            top: 12,
-            left: 12,
-            zIndex: 1,
-            font: '600 13px system-ui',
-            padding: '8px 16px',
-            borderRadius: 999,
-            border: 0,
-            background: 'rgba(0,0,0,.5)',
-            color: '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          Keluar
-        </button>
-      )}
-      {redealNotice && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 16,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '10px 20px',
-            borderRadius: 999,
-            background: 'rgba(0,0,0,.75)',
-            color: '#fff',
-            fontFamily: 'system-ui',
-            fontSize: 14,
-            pointerEvents: 'none',
-          }}
-        >
-          Kartu dibagikan ulang: ada kursi dengan 5 balak atau lebih
-        </div>
-      )}
-      {summary && (
-        <div data-testid="session-summary" style={overlay}>
-          <div style={{ textAlign: 'center', minWidth: 300 }}>
-            <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>
-              {summary.cause.kind === 'emptyHand'
-                ? `${SEAT_INFO[summary.cause.winner]!.name} Menang!`
-                : `Gaplek ${summary.cause.pip}`}
-            </h2>
-            <table style={{ margin: '0 auto', borderCollapse: 'collapse', fontSize: 15 }}>
-              <thead>
-                <tr style={{ opacity: 0.7 }}>
-                  <th style={{ padding: '2px 12px', textAlign: 'left' }} />
-                  <th style={{ padding: '2px 12px' }}>Sisa kartu</th>
-                  <th style={{ padding: '2px 12px' }}>Poin ronde</th>
-                  <th style={{ padding: '2px 12px' }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.hands.map((hand, seat) => (
-                  <tr key={seat}>
-                    <td style={{ padding: '2px 12px', textAlign: 'left' }}>{SEAT_INFO[seat]!.name}</td>
-                    <td style={{ padding: '2px 12px' }}>{hand.length}</td>
-                    <td style={{ padding: '2px 12px' }}>{summary.sessionPoints[seat]}</td>
-                    <td style={{ padding: '2px 12px' }}>{summary.totals[seat]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-      {gameResult && state && <HasilAkhir result={gameResult} totals={state.totals} seats={SEAT_INFO}
-        onPlayAgain={onPlayAgain} onBackToMenu={onBackToMenu} />}
-      {w < h && (
-        <div style={{ ...overlay, zIndex: 3, background: '#123e2b', textAlign: 'center', padding: 24, boxSizing: 'border-box' }}>
-          <div>
-            <div aria-hidden="true" style={{ fontSize: 52, marginBottom: 12 }}>↻</div>
-            <h2 style={{ fontSize: 24, margin: '0 0 8px' }}>Putar HP ke posisi landscape</h2>
-            <p style={{ margin: 0, opacity: 0.8 }}>Meja dimainkan dalam posisi mendatar.</p>
-          </div>
-        </div>
-      )}
-    </>
+    <LayarMeja
+      game={game}
+      seats={SEAT_INFO}
+      humanSeat={HUMAN_SEAT}
+      muted={muted}
+      onMute={onMute}
+      gambar={gambar}
+      onReady={() => setReady(true)}
+      exitConfirm="Keluar dari game yang sedang berjalan? Progres game ini akan hilang."
+      onExit={onExit}
+      onPlayAgain={onPlayAgain}
+      onBackToMenu={onBackToMenu}
+    />
   );
 }
 
@@ -241,7 +124,7 @@ export function App() {
     audio.setMuted(!audio.muted);
     setMuted(audio.muted);
   };
-  const [screen, setScreen] = useState<'menu' | 'meja'>('menu');
+  const [screen, setScreen] = useState<'menu' | 'meja' | 'online'>('menu');
   const [config, setConfig] = useState<Partial<GameConfig>>({});
   const [gambar, setGambar] = useState<GambarMeja>(gambarMejaAwal);
   useEffect(() => { if (gambar !== 'hijau') pilihGambarMeja(gambar); }, []);
@@ -249,6 +132,9 @@ export function App() {
   // Keluar dan "main lagi" kembali ke menu dengan target/balak ganda game ini tetap terisi (bisa diubah);
   // "kembali ke menu" mengatur ulang ke bawaan.
   const toMenuKeepConfig = () => setScreen('menu');
+  if (screen === 'online') {
+    return <LayarOnline audio={audio} muted={muted} onMute={toggleMute} gambar={gambar} onKeluar={() => setScreen('menu')} />;
+  }
   return screen === 'menu' ? (
     <Menu
       initial={config}
@@ -256,6 +142,10 @@ export function App() {
       onMute={toggleMute}
       gambar={gambar}
       onGambar={onGambar}
+      onOnline={() => {
+        audio.unlock();
+        setScreen('online');
+      }}
       onStart={(cfg) => {
         audio.unlock();
         setConfig(cfg);
