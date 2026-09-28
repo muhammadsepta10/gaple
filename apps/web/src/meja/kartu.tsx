@@ -67,6 +67,9 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
   useLayoutEffect(() => {
     const g = graphic.current;
     if (!g) return;
+    // Flip yang terpotong sebelum tick membuka muka (mis. tab tersembunyi: rAF berhenti, setTimeout tetap jalan)
+    // meninggalkan punggung kartu; `draw` tidak dipanggil ulang karena identitasnya tidak berubah.
+    const faceHidden = !!flight.current?.flip && !flight.current.revealed;
     if (motion) {
       const from = motion.from ?? renderedPose.current ?? pose;
       flight.current = {
@@ -83,8 +86,9 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
       if (motion.flip) {
         g.clear();
         drawBack(g);
-      }
+      } else if (faceHidden) draw(g);
     } else {
+      if (faceHidden) draw(g);
       flight.current = null;
       g.position.set(pose.x, pose.y);
       g.rotation = pose.rot;
