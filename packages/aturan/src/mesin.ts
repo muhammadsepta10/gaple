@@ -1,10 +1,9 @@
 import { shuffle, type Random } from './acak';
 import { fullSet, isBalak, otherPip, type Card } from './kartu';
+import { SEATS, type Seat } from './kursi';
+import { sessionPoints } from './poin';
 
-export type Seat = 0 | 1 | 2 | 3;
-
-/** Semua kursi dalam urutan giliran searah jarum jam. */
-export const SEATS: readonly Seat[] = [0, 1, 2, 3];
+export { SEATS, type Seat } from './kursi';
 
 export type GameConfig = { readonly targetPoints: number; readonly doubleBalak: boolean };
 
@@ -41,6 +40,8 @@ export type SessionEndCause = { readonly kind: 'emptyHand'; readonly winner: Sea
 
 export type GameState = {
   readonly config: GameConfig;
+  /** Total poin terakumulasi per kursi dalam game ini. */
+  readonly totals: readonly number[];
   readonly session: SessionState;
 };
 
@@ -59,22 +60,55 @@ export type GameEvent =
       readonly cause: SessionEndCause;
       /** Sisa kartu setiap kursi saat sesi berakhir. */
       readonly hands: readonly (readonly Card[])[];
+      /** Poin sesi per kursi (balak ganda dan balak 0 mati sudah diperhitungkan). */
+      readonly sessionPoints: readonly number[];
+      /** Total poin per kursi setelah poin sesi ini ditambahkan. */
+      readonly totals: readonly number[];
     };
 
 export type Transition = { readonly state: GameState; readonly events: readonly GameEvent[] };
 
 const DEFAULT_CONFIG: GameConfig = { targetPoints: 100, doubleBalak: false };
 
+const hasFiveOrMoreBalak = (hand: readonly Card[]): boolean => hand.filter(isBalak).length >= 5;
+
+/** Membagikan 28 kartu untuk satu sesi, mengulang jika ada kursi dengan ≥5 balak. */
+function dealSession(sessionNumber: number, random: Random): { hands: Card[][]; events: GameEvent[] } {
+  const events: GameEvent[] = [];
+  let hands: Card[][];
+  let attempt = 0;
+  do {
+    const deck = shuffle(fullSet(), random);
+    hands = SEATS.map((i) => deck.slice(i * 7, i * 7 + 7));
+    events.push({ type: 'dealt', session: sessionNumber, hands, redeal: attempt > 0 });
+    attempt++;
+  } while (hands.some(hasFiveOrMoreBalak));
+  return { hands, events };
+}
+
 export function startGame(config: Partial<GameConfig>, random: Random): Transition {
-  const deck = shuffle(fullSet(), random);
-  const hands = SEATS.map((i) => deck.slice(i * 7, i * 7 + 7));
+  const { hands, events } = dealSession(1, random);
   const opening: Opening = { kind: 'balak', pip: 0 };
   const turn = SEATS.find((s) => hands[s]!.some((c) => isBalak(c) && c.a === opening.pip))!;
   const session: SessionState = { number: 1, hands, chain: { placements: [], ends: null }, opening, turn, result: null };
-  return {
-    state: { config: { ...DEFAULT_CONFIG, ...config }, session },
-    events: [{ type: 'dealt', session: 1, hands, redeal: false }],
-  };
+  const totals = SEATS.map(() => 0);
+  return { state: { config: { ...DEFAULT_CONFIG, ...config }, totals, session }, events };
+}
+
+/**
+ * Memulai sesi berikutnya dalam game yang sama, setelah sesi sebelumnya berakhir.
+ * Pembuka: bebas memilih kartu untuk pemenang sesi, atau wajib balak n untuk pemegangnya setelah gaplek n.
+ */
+export function nextSession(state: GameState, random: Random): Transition {
+  const cause = state.session.result;
+  if (!cause) throw new Error('sesi belum berakhir');
+  const number = state.session.number + 1;
+  const { hands, events } = dealSession(number, random);
+  const opening: Opening = cause.kind === 'emptyHand' ? { kind: 'free' } : { kind: 'balak', pip: cause.pip };
+  const turn: Seat =
+    cause.kind === 'emptyHand' ? cause.winner : SEATS.find((s) => hands[s]!.some((c) => isBalak(c) && c.a === cause.pip))!;
+  const session: SessionState = { number, hands, chain: { placements: [], ends: null }, opening, turn, result: null };
+  return { state: { ...state, session }, events };
 }
 
 export function legalMoves(state: GameState): Move[] {
@@ -137,8 +171,11 @@ export function applyMove(state: GameState, move: Move): MoveResult {
     chain: { placements: [...session.chain.placements, placement], ends: newEnds },
   };
   const end = (cause: SessionEndCause): MoveResult => {
-    events.push({ type: 'sessionEnded', cause, hands });
-    return { ok: true, state: { ...state, session: { ...next, result: cause } }, events };
+    const winner = cause.kind === 'emptyHand' ? cause.winner : null;
+    const points = sessionPoints(hands, winner, state.config.doubleBalak);
+    const totals = state.totals.map((t, i) => t + points[i]!);
+    events.push({ type: 'sessionEnded', cause, hands, sessionPoints: points, totals });
+    return { ok: true, state: { ...state, totals, session: { ...next, result: cause } }, events };
   };
   if (hands[move.seat]!.length === 0) return end({ kind: 'emptyHand', winner: move.seat });
   if (!SEATS.some((s) => movesFor(next, s).length > 0)) return end({ kind: 'gaplek', pip: newEnds.left });

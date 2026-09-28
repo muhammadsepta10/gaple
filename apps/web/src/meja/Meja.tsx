@@ -10,7 +10,7 @@ extend({ Container, Graphics, Text });
 
 const FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 
-export type SeatInfo = { name: string; bot: boolean; points: number };
+export type SeatInfo = { name: string; bot: boolean };
 
 type MejaProps = {
   w: number;
@@ -62,6 +62,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
           rect={L.pill(seat)}
           compact={L.compact}
           info={seats[seat]!}
+          points={state.totals[seat]!}
           count={session.hands[seat]!.length}
           turn={!session.result && session.turn === seat}
         />
@@ -100,7 +101,21 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
   );
 }
 
-function SeatPill({ rect, compact, info, count, turn }: { rect: Rect; compact: boolean; info: SeatInfo; count: number; turn: boolean }) {
+function SeatPill({
+  rect,
+  compact,
+  info,
+  points,
+  count,
+  turn,
+}: {
+  rect: Rect;
+  compact: boolean;
+  info: SeatInfo;
+  points: number;
+  count: number;
+  turn: boolean;
+}) {
   const { x, y, w, h } = rect;
   const glow = useRef<Graphics>(null);
   const draw = useCallback(
@@ -128,7 +143,7 @@ function SeatPill({ rect, compact, info, count, turn }: { rect: Rect; compact: b
       <pixiGraphics ref={glow} draw={() => {}} />
       <pixiGraphics draw={draw} />
       <pixiText text={info.name} x={x + 12} y={y + (compact ? 4 : 5)} resolution={2} style={{ fill: 0xffffff, fontSize: compact ? 12 : 13, fontWeight: '700', fontFamily: FONT }} />
-      <pixiText text={`${info.points} poin · ${count} kartu`} x={x + 12} y={y + (compact ? 17 : 21)} resolution={2} style={{ fill: 0xcfe3d6, fontSize: compact ? 9.5 : 11, fontFamily: FONT }} />
+      <pixiText text={`${points} poin · ${count} kartu`} x={x + 12} y={y + (compact ? 17 : 21)} resolution={2} style={{ fill: 0xcfe3d6, fontSize: compact ? 9.5 : 11, fontFamily: FONT }} />
       {info.bot && <pixiText text="BOT" anchor={0.5} x={x + w - 22} y={y + h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: 9, fontWeight: '800', fontFamily: FONT }} />}
     </pixiContainer>
   );

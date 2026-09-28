@@ -4,6 +4,7 @@ export {
   SEATS,
   applyMove,
   legalMoves,
+  nextSession,
   startGame,
   type Chain,
   type End,
