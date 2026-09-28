@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+
+# Kode prototype tidak dijadikan fondasi; yang disimpan hanya hasil, screenshot, dan suara.
+.scratch/prototype-meja/*
+!.scratch/prototype-meja/HASIL.md
+!.scratch/prototype-meja/shots/
+!.scratch/prototype-meja/public/
+.scratch/prototype-meja/public/*
+!.scratch/prototype-meja/public/sfx/
