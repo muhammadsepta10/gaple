@@ -31,14 +31,14 @@ function pandanganTerakhir(hasil: Hasil, token: string): SeatView | null {
 
 function ruangSiapMain(sekarang = 0) {
   const benih = benihTetap();
-  const a = terapkan(buatRuang(), masuk('tok-a', 'Budi'), sekarang, benih);
+  const a = terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), sekarang, benih);
   const b = terapkan(a.state, { jenis: 'mulai', token: 'tok-a' }, sekarang, benih);
   return { benih, hasil: b };
 }
 
 describe('ruang: tracer game online lawan bot', () => {
   it('pembuat ruang duduk di kursi 0 dan menjadi host', () => {
-    const hasil = terapkan(buatRuang(), masuk('tok-a', 'Budi'), 0, benihTetap());
+    const hasil = terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benihTetap());
     const lobi = proyeksiLobi(hasil.state);
     expect(lobi.fase).toBe('lobi');
     expect(lobi.hostKursi).toBe(0);
@@ -48,13 +48,13 @@ describe('ruang: tracer game online lawan bot', () => {
   });
 
   it('versi protokol berbeda ditolak', () => {
-    const hasil = terapkan(buatRuang(), { ...masuk('tok-a', 'Budi'), versi: VERSI_PROTOKOL + 1 }, 0, benihTetap());
+    const hasil = terapkan(buatRuang('KODE22'), { ...masuk('tok-a', 'Budi'), versi: VERSI_PROTOKOL + 1 }, 0, benihTetap());
     expect(pesanUntuk(hasil, 'tok-a')).toEqual([{ jenis: 'ditolak', alasan: 'perlu-pembaruan' }]);
-    expect(hasil.state).toEqual(buatRuang());
+    expect(hasil.state).toEqual(buatRuang('KODE22'));
   });
 
   it('nama panggilan kosong ditolak', () => {
-    const hasil = terapkan(buatRuang(), masuk('tok-a', '   '), 0, benihTetap());
+    const hasil = terapkan(buatRuang('KODE22'), masuk('tok-a', '   '), 0, benihTetap());
     expect(pesanUntuk(hasil, 'tok-a')).toEqual([{ jenis: 'ditolak', alasan: 'nama-tidak-sah' }]);
   });
 
@@ -73,7 +73,7 @@ describe('ruang: tracer game online lawan bot', () => {
 
   it('hanya host yang bisa memulai game', () => {
     const benih = benihTetap();
-    const a = terapkan(buatRuang(), masuk('tok-a', 'Budi'), 0, benih);
+    const a = terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benih);
     const b = terapkan(a.state, masuk('tok-b', 'Agus'), 0, benih);
     const c = terapkan(b.state, { jenis: 'mulai', token: 'tok-b' }, 0, benih);
     expect(c.pesan).toEqual([{ untuk: 'tok-b', pesan: { jenis: 'ditolak', alasan: 'bukan-host' } }]);
@@ -107,7 +107,7 @@ describe('ruang: tracer game online lawan bot', () => {
 
   it('langkah tidak sah ditolak dan hanya pengirim diberi tahu', () => {
     const benih = benihTetap();
-    let hasil = terapkan(buatRuang(), masuk('tok-a', 'Budi'), 0, benih);
+    let hasil = terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benih);
     hasil = terapkan(hasil.state, masuk('tok-b', 'Agus'), 0, benih);
     hasil = terapkan(hasil.state, { jenis: 'mulai', token: 'tok-a' }, 0, benih);
     const game = hasil.state.game!;
@@ -162,7 +162,7 @@ describe('ruang: tracer game online lawan bot', () => {
 function sampaiGiliranManusia() {
   for (let awal = 1; awal < 50; awal++) {
     const benih = benihTetap(awal);
-    let hasil = terapkan(terapkan(buatRuang(), masuk('tok-a', 'Budi'), 0, benih).state, { jenis: 'mulai', token: 'tok-a' }, 0, benih);
+    let hasil = terapkan(terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benih).state, { jenis: 'mulai', token: 'tok-a' }, 0, benih);
     while (hasil.tenggatBerikutnya !== null) hasil = jalankanTenggat(hasil.state, hasil.tenggatBerikutnya, benih);
     if (hasil.state.game && !hasil.state.game.session.result && hasil.state.game.session.turn === 0) return { benih, hasil };
   }
@@ -174,7 +174,7 @@ type Akhir = Hasil & { semuaPesan: Pesan[] };
 /** Manusia di kursi 0 bermain `chooseMove` tepat saat jendela selesai; waktu dimajukan ke tenggat berikutnya. */
 export function mainkanSampaiSelesai(awal: number, config?: { targetPoints: number }, batasLangkah = 2000): Akhir {
   const benih = benihTetap(awal);
-  let state: StateRuang = terapkan(buatRuang(), masuk('tok-a', 'Budi'), 0, benih).state;
+  let state: StateRuang = terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benih).state;
   if (config) state = { ...state, config: { ...state.config, ...config } };
   let hasil = terapkan(state, { jenis: 'mulai', token: 'tok-a' }, 0, benih);
   const semuaPesan: Pesan[] = pesanUntuk(hasil, 'tok-a');

@@ -1,6 +1,6 @@
 # 02 — Main bersama teman: gabung, kursi, host
 
-Status: ready-for-agent
+Status: done
 Blocked by: 01
 
 ## Parent
@@ -22,12 +22,12 @@ Teman bisa bergabung ke **Ruang privat** lewat tautan atau **Kode undangan**, me
 
 ## Acceptance criteria
 
-- [ ] Dua sampai empat pemain dari browser berbeda bisa bergabung lewat tautan dan lewat kode manual, memilih kursi, lalu bermain satu game bersama. Kursi sisa diisi bot.
-- [ ] Nama yang bentrok (termasuk beda huruf besar-kecil) atau di luar 1–12 grafem ditolak dengan pesan yang jelas.
-- [ ] Hanya host yang bisa mengubah konfigurasi, memindahkan atau mengosongkan kursi, dan memulai game. Perintah host dari non-host ditolak.
-- [ ] Setelah game selesai, host bisa mengubah target dan memulai game baru dengan kursi yang sama.
-- [ ] Tes paket ruang untuk aturan kursi, nama panggilan, kontrol host, dan game baru.
-- [ ] Verifikasi agent-browser: dua sesi browser (host + teman) + dua bot bermain satu ronde sampai ringkasan.
+- [x] Dua sampai empat pemain dari browser berbeda bisa bergabung lewat tautan dan lewat kode manual, memilih kursi, lalu bermain satu game bersama. Kursi sisa diisi bot.
+- [x] Nama yang bentrok (termasuk beda huruf besar-kecil) atau di luar 1–12 grafem ditolak dengan pesan yang jelas.
+- [x] Hanya host yang bisa mengubah konfigurasi, memindahkan atau mengosongkan kursi, dan memulai game. Perintah host dari non-host ditolak.
+- [x] Setelah game selesai, host bisa mengubah target dan memulai game baru dengan kursi yang sama.
+- [x] Tes paket ruang untuk aturan kursi, nama panggilan, kontrol host, dan game baru.
+- [x] Verifikasi agent-browser: dua sesi browser (host + teman) + dua bot bermain satu ronde sampai ringkasan.
 
 ## Blocked by
 
@@ -36,3 +36,11 @@ Teman bisa bergabung ke **Ruang privat** lewat tautan atau **Kode undangan**, me
 ## Comments
 
 - (dari tiket 01) Tata letak `Meja` masih mengandaikan kursi sendiri = 0 di bawah. Di tiket 01 pembuat ruang selalu kursi 0, jadi aman. Begitu teman bisa duduk di kursi 1–3, pengendali online perlu memutar kursi (kursi relatif = (kursi − kursiSaya + 4) mod 4) untuk tangan, susunan, giliran, skor, event, dan info kursi sebelum diteruskan ke `Meja`.
+- (tiket 02 selesai) Verifikasi: `.scratch/mode-online/verifikasi-02-main-bersama-teman.md`. Keputusan yang perlu diketahui tiket berikutnya:
+  - `VERSI_PROTOKOL` naik ke 2 (perintah baru `pilihKursi`, `pindahkan`, `kosongkan`, `aturKonfigurasi`). Kode undangan kini disimpan di `StateRuang.kode`.
+  - Host yang memindahkan pemain ke kursi berisi manusia menukar keduanya. Host tidak bisa mengosongkan kursinya sendiri (`kursi-host`), supaya host selalu duduk.
+  - Pemain yang kursinya dikosongkan host tetap di ruang tanpa kursi dan tetap memegang nama panggilan; ia bisa duduk lagi. Jika game dimulai saat itu, ia belum menerima apa pun. Tiket 04 perlu menjadikannya penonton (termasuk batas 8).
+  - Keluar ruang masih hanya memutus koneksi (kursi tetap). Perintah "keluar ruang" yang melepas kursi dan nama dikerjakan di tiket 03.
+  - Pengecekan bentrok kode hanya terhadap ruang aktif di memori proses (`kodeAktif` di `apps/server/src/server.ts`). Tiket 05 memindahkannya ke Redis + penanda "bekas".
+  - Rotasi kursi dikerjakan di `Meja` lewat `posisiKursi` (bukan di pengendali online), jadi state dan event tetap memakai nomor kursi asli.
+  - Snapshot di luar fase `bermain` tidak membawa pandangan; perubahan kursi setelah hasil akhir memindahkan pemain yang terdampak dari layar skor akhir ke lobi.

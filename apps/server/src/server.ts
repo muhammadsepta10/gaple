@@ -1,8 +1,9 @@
 import { Room, ServerError, defineRoom, defineServer, type Client } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import { SEATS, type Seat } from '@gaple/aturan';
 import {
-  buatRuang, jalankanTenggat, proyeksiLobi, terapkan,
+  buatKodeUndangan, buatRuang, jalankanTenggat, proyeksiLobi, terapkan,
   type Benih, type Hasil, type Pesan, type Perintah, type StateRuang,
 } from '@gaple/ruang';
 
@@ -28,29 +29,59 @@ export type KonfigServer = {
 /** Seed setiap pembagian kartu dari sumber acak kriptografis. */
 const benihKripto: Benih = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
+const acakKripto = () => benihKripto() / 2 ** 32;
+
+const kursiSah = (x: unknown): x is Seat => SEATS.includes(x as Seat);
+
+/**
+ * Menerjemahkan pesan klien menjadi perintah untuk token pengirim; `null` jika bentuknya tidak dikenali.
+ * Identitas selalu dari token koneksi, tidak pernah dari isi pesan.
+ */
+const PESAN_KLIEN: Record<string, (isi: Record<string, unknown>, token: string) => Perintah | null> = {
+  mulai: (_, token) => ({ jenis: 'mulai', token }),
+  pasang: ({ cardId, end }, token) =>
+    typeof cardId === 'string' && (end === 'left' || end === 'right') ? { jenis: 'pasang', token, cardId, end } : null,
+  pilihKursi: ({ kursi }, token) => (kursiSah(kursi) ? { jenis: 'pilihKursi', token, kursi } : null),
+  pindahkan: ({ dari, ke }, token) => (kursiSah(dari) && kursiSah(ke) ? { jenis: 'pindahkan', token, dari, ke } : null),
+  kosongkan: ({ kursi }, token) => (kursiSah(kursi) ? { jenis: 'kosongkan', token, kursi } : null),
+  aturKonfigurasi: ({ targetPoin, balakGanda }, token) =>
+    typeof targetPoin === 'number' && typeof balakGanda === 'boolean'
+      ? { jenis: 'aturKonfigurasi', token, config: { targetPoints: targetPoin, doubleBalak: balakGanda } }
+      : null,
+};
+
+/** Kode undangan ruang aktif di proses ini; pengecekan bentrok terhadap Redis menyusul (tiket 05). */
+const kodeAktif = new Set<string>();
+
 function kelasRuang({ skala = 1 }: KonfigServer) {
   const awal = Date.now();
   const sekarang = () => awal + (Date.now() - awal) * skala;
 
   return class RuangRoom extends Room<{ state: Lobi }> {
-    private ruang: StateRuang = buatRuang();
+    private ruang!: StateRuang;
     /** sessionId Colyseus → token pemain. sessionId hanya alamat koneksi. */
     private tokenKoneksi = new Map<string, string>();
     private timer: ReturnType<typeof setTimeout> | undefined;
 
     onCreate() {
+      this.roomId = buatKodeUndangan(acakKripto, (kode) => kodeAktif.has(kode));
+      kodeAktif.add(this.roomId);
+      this.ruang = buatRuang(this.roomId);
       this.state = new LobiSchema();
       for (let i = 0; i < 4; i++) this.state.kursi.push(new KursiSchema());
       this.sinkronLobi();
-      this.onMessage('mulai', (client) => this.perintah(client, (token) => ({ jenis: 'mulai', token })));
-      this.onMessage('pasang', (client, pesan: unknown) => {
-        const { cardId, end } = (pesan ?? {}) as { cardId?: unknown; end?: unknown };
-        if (typeof cardId !== 'string' || (end !== 'left' && end !== 'right')) {
-          const tolak: Pesan = { jenis: 'ditolak', alasan: 'perintah-tidak-sah' };
-          return client.send('pesan', tolak);
-        }
-        this.perintah(client, (token) => ({ jenis: 'pasang', token, cardId, end }));
-      });
+      for (const [jenis, terjemah] of Object.entries(PESAN_KLIEN)) {
+        this.onMessage(jenis, (client, isi: unknown) => {
+          const token = this.tokenKoneksi.get(client.sessionId);
+          if (!token) return;
+          const perintah = terjemah(typeof isi === 'object' && isi !== null ? isi as Record<string, unknown> : {}, token);
+          if (!perintah) {
+            const tolak: Pesan = { jenis: 'ditolak', alasan: 'perintah-tidak-sah' };
+            return client.send('pesan', tolak);
+          }
+          this.terima(terapkan(this.ruang, perintah, sekarang(), benihKripto));
+        });
+      }
     }
 
     onJoin(client: Client, opsi: { token?: unknown; nama?: unknown; versi?: unknown }) {
@@ -70,12 +101,7 @@ function kelasRuang({ skala = 1 }: KonfigServer) {
 
     onDispose() {
       clearTimeout(this.timer);
-    }
-
-    private perintah(client: Client, buat: (token: string) => Perintah) {
-      const token = this.tokenKoneksi.get(client.sessionId);
-      if (!token) return;
-      this.terima(terapkan(this.ruang, buat(token), sekarang(), benihKripto));
+      kodeAktif.delete(this.roomId);
     }
 
     /** Menyimpan state baru, menyinkronkan lobi, mengirim pesan per penerima, lalu menjadwalkan tenggat. */

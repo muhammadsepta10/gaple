@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import type { Placement } from '@gaple/aturan';
 import { fullSet } from '../../../packages/aturan/src/kartu';
-import { layoutChain, tableLayout } from '../src/meja/tataLetak';
+import { layoutChain, posisiKursi, tableLayout } from '../src/meja/tataLetak';
 
 const placed = (a: number, b: number, end: 'left' | 'right', open: number): Placement => ({
   seat: 0,
@@ -125,3 +125,11 @@ function legalChain(seed: number, count: number, split: number): Placement[] {
   }
   return chain;
 }
+
+describe('posisiKursi', () => {
+  it('kursi sendiri selalu di bawah dan kursi lain tetap searah jarum jam', () => {
+    expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 0))).toEqual([0, 1, 2, 3]);
+    expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 2))).toEqual([2, 3, 0, 1]);
+    expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 3))).toEqual([1, 2, 3, 0]);
+  });
+});

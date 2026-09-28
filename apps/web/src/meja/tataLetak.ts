@@ -6,8 +6,14 @@ export type Rect = { x: number; y: number; w: number; h: number };
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 /**
+ * Posisi layar sebuah kursi dilihat dari kursi sendiri: 0 = bawah, lalu searah jarum jam.
+ * Dengan begitu kursi sendiri selalu di bawah, di kursi mana pun ia duduk.
+ */
+export const posisiKursi = (seat: Seat, kursiSendiri: Seat) => ((seat - kursiSendiri + 4) % 4) as Seat;
+
+/**
  * Tata letak meja varian D.
- * Kursi: 0 = kamu (bawah), 1 = kiri, 2 = atas, 3 = kanan — searah jarum jam.
+ * Posisi (lihat `posisiKursi`): 0 = kamu (bawah), 1 = kiri, 2 = atas, 3 = kanan — searah jarum jam.
  */
 export function tableLayout(w: number, h: number) {
   const m = 8;

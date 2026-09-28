@@ -6,9 +6,10 @@ import { DURASI } from './durasi';
 import { durasiJendela } from './tempo';
 
 /** Naikkan hanya ketika bentuk perintah, pesan, atau event berubah. */
-export const VERSI_PROTOKOL = 1;
+export const VERSI_PROTOKOL = 2;
 
-const PANJANG_NAMA_MAKS = 12;
+export const PANJANG_NAMA_MAKS = 12;
+export const TARGET_POIN_MAKS = 10_000;
 
 export type Fase = 'lobi' | 'bermain' | 'hasil';
 
@@ -18,6 +19,8 @@ export type Tenggat = { readonly jenis: 'langkahBot' | 'rondeBerikutnya'; readon
 
 /** State ruang: data biasa yang bisa diserialisasi apa adanya. */
 export type StateRuang = {
+  /** Kode undangan = roomId; ikut tersimpan di snapshot. */
+  readonly kode: string;
   readonly fase: Fase;
   readonly config: GameConfig;
   /** Orang di ruang, dikunci token pemain. */
@@ -34,6 +37,10 @@ export type StateRuang = {
 
 export type Perintah =
   | { readonly jenis: 'masuk'; readonly token: string; readonly nama: string; readonly versi: number }
+  | { readonly jenis: 'pilihKursi'; readonly token: string; readonly kursi: Seat }
+  | { readonly jenis: 'pindahkan'; readonly token: string; readonly dari: Seat; readonly ke: Seat }
+  | { readonly jenis: 'kosongkan'; readonly token: string; readonly kursi: Seat }
+  | { readonly jenis: 'aturKonfigurasi'; readonly token: string; readonly config: GameConfig }
   | { readonly jenis: 'mulai'; readonly token: string }
   | { readonly jenis: 'pasang'; readonly token: string; readonly cardId: string; readonly end: End };
 
@@ -45,6 +52,11 @@ export type AlasanTolak =
   | 'game-berjalan'
   | 'bukan-host'
   | 'bukan-pemain'
+  | 'kursi-terisi'
+  | 'kursi-kosong'
+  /** Host tidak bisa mengosongkan kursinya sendiri. */
+  | 'kursi-host'
+  | 'konfigurasi-tidak-sah'
   | 'masih-presentasi'
   /** Bentuk pesan dari klien tidak dikenali (diperiksa adaptor). */
   | 'perintah-tidak-sah'
@@ -89,8 +101,9 @@ export type LobiPublik = {
   readonly config: GameConfig;
 };
 
-export function buatRuang(): StateRuang {
+export function buatRuang(kode: string): StateRuang {
   return {
+    kode,
     fase: 'lobi',
     config: { targetPoints: 100, doubleBalak: false },
     orang: {},
@@ -116,9 +129,20 @@ const sisa = (state: StateRuang, sekarang: number) => Math.max(0, state.jendelaS
 
 const panjangGrafem = (teks: string) => [...new Intl.Segmenter().segment(teks)].length;
 
+/** Nama panggilan yang dipangkas, atau `null` jika di luar 1–12 grafem (emoji dihitung satu). */
+export function rapikanNama(nama: string): string | null {
+  const rapi = nama.trim();
+  const panjang = panjangGrafem(rapi);
+  return panjang >= 1 && panjang <= PANJANG_NAMA_MAKS ? rapi : null;
+}
+
 export function terapkan(state: StateRuang, perintah: Perintah, sekarang: number, benih: Benih): Hasil {
   switch (perintah.jenis) {
     case 'masuk': return masuk(state, perintah, sekarang);
+    case 'pilihKursi': return pilihKursi(state, perintah, sekarang);
+    case 'pindahkan': return pindahkan(state, perintah, sekarang);
+    case 'kosongkan': return kosongkan(state, perintah, sekarang);
+    case 'aturKonfigurasi': return aturKonfigurasi(state, perintah);
     case 'mulai': return mulai(state, perintah.token, sekarang, benih);
     case 'pasang': return pasang(state, perintah, sekarang);
   }
@@ -159,8 +183,8 @@ function masuk(state: StateRuang, perintah: Extract<Perintah, { jenis: 'masuk' }
   if (perintah.versi !== VERSI_PROTOKOL) return tolak(state, token, 'perlu-pembaruan');
   if (state.orang[token]) return selesai(state, [{ untuk: token, pesan: snapshot(state, token, sekarang) }]);
   if (state.fase === 'bermain') return tolak(state, token, 'game-berjalan');
-  const nama = perintah.nama.trim();
-  if (panjangGrafem(nama) < 1 || panjangGrafem(nama) > PANJANG_NAMA_MAKS) return tolak(state, token, 'nama-tidak-sah');
+  const nama = rapikanNama(perintah.nama);
+  if (nama === null) return tolak(state, token, 'nama-tidak-sah');
   const dipakai = Object.values(state.orang).some((o) => o.nama.toLocaleLowerCase() === nama.toLocaleLowerCase());
   if (dipakai) return tolak(state, token, 'nama-dipakai');
   const kursi = SEATS.find((s) => !state.kursi[s]);
@@ -174,9 +198,70 @@ function masuk(state: StateRuang, perintah: Extract<Perintah, { jenis: 'masuk' }
   return selesai(next, [{ untuk: token, pesan: snapshot(next, token, sekarang) }]);
 }
 
-function mulai(state: StateRuang, token: string, sekarang: number, benih: Benih): Hasil {
+function pilihKursi(state: StateRuang, { token, kursi }: Extract<Perintah, { jenis: 'pilihKursi' }>, sekarang: number): Hasil {
+  if (!state.orang[token]) return tolak(state, token, 'bukan-pemain');
+  if (state.fase === 'bermain') return tolak(state, token, 'game-berjalan');
+  if (state.kursi[kursi]) return tolak(state, token, 'kursi-terisi');
+  return dudukkan(state, { [kursi]: token, ...lepasKursi(state, token) }, sekarang);
+}
+
+function pindahkan(state: StateRuang, { token, dari, ke }: Extract<Perintah, { jenis: 'pindahkan' }>, sekarang: number): Hasil {
+  const tolakHost = periksaHost(state, token);
+  if (tolakHost) return tolakHost;
+  const dipindah = state.kursi[dari];
+  if (!dipindah) return tolak(state, token, 'kursi-kosong');
+  // Kursi tujuan yang berisi manusia ditukar.
+  return dudukkan(state, { [ke]: dipindah, [dari]: state.kursi[ke] ?? null }, sekarang);
+}
+
+function kosongkan(state: StateRuang, { token, kursi }: Extract<Perintah, { jenis: 'kosongkan' }>, sekarang: number): Hasil {
+  const tolakHost = periksaHost(state, token);
+  if (tolakHost) return tolakHost;
+  const pemilik = state.kursi[kursi];
+  if (!pemilik) return tolak(state, token, 'kursi-kosong');
+  if (pemilik === token) return tolak(state, token, 'kursi-host');
+  // Pemilik tetap di ruang tanpa kursi dan tetap memegang nama panggilannya.
+  return dudukkan(state, { [kursi]: null }, sekarang);
+}
+
+function aturKonfigurasi(state: StateRuang, { token, config }: Extract<Perintah, { jenis: 'aturKonfigurasi' }>): Hasil {
+  const tolakHost = periksaHost(state, token);
+  if (tolakHost) return tolakHost;
+  const { targetPoints, doubleBalak } = config;
+  if (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > TARGET_POIN_MAKS || typeof doubleBalak !== 'boolean') {
+    return tolak(state, token, 'konfigurasi-tidak-sah');
+  }
+  return selesai({ ...state, config: { targetPoints, doubleBalak } });
+}
+
+/** Perintah host hanya berlaku dari host dan di luar game. */
+function periksaHost(state: StateRuang, token: string): Hasil | null {
   if (state.host !== token) return tolak(state, token, 'bukan-host');
   if (state.fase === 'bermain') return tolak(state, token, 'game-berjalan');
+  return null;
+}
+
+/** Kursi yang kini ditempati `token`, dikosongkan (untuk digabung ke perubahan kursi). */
+function lepasKursi(state: StateRuang, token: string): Partial<Record<Seat, null>> {
+  const kursi = state.orang[token]!.kursi;
+  return kursi === null ? {} : { [kursi]: null };
+}
+
+/** Menerapkan perubahan pemilik kursi; setiap orang yang kursinya berubah menerima snapshot. */
+function dudukkan(state: StateRuang, ubah: Partial<Record<Seat, string | null>>, sekarang: number): Hasil {
+  const kursi = state.kursi.map((t, i) => (i in ubah ? ubah[i as Seat] ?? null : t));
+  const orang = Object.fromEntries(Object.entries(state.orang).map(([t, o]): [string, Orang] => {
+    const seat = kursi.indexOf(t);
+    return [t, { ...o, kursi: seat < 0 ? null : (seat as Seat) }];
+  }));
+  const next: StateRuang = { ...state, kursi, orang };
+  const berubah = Object.keys(orang).filter((t) => orang[t]!.kursi !== state.orang[t]!.kursi);
+  return selesai(next, berubah.map((untuk) => ({ untuk, pesan: snapshot(next, untuk, sekarang) })));
+}
+
+function mulai(state: StateRuang, token: string, sekarang: number, benih: Benih): Hasil {
+  const tolakHost = periksaHost(state, token);
+  if (tolakHost) return tolakHost;
   const awal = startGame(state.config, seededRandom(benih()));
   const siap: StateRuang = { ...state, fase: 'bermain', botSejakAwal: SEATS.filter((s) => !state.kursi[s]) };
   const next = transisi(siap, awal.state, awal.events, sekarang);
@@ -230,6 +315,7 @@ function pesanTransisi(state: StateRuang, events: readonly GameEvent[], sekarang
 
 function snapshot(state: StateRuang, token: string, sekarang: number): Pesan {
   const kursi = state.orang[token]!.kursi;
-  const pandangan = state.game && kursi !== null ? seatView(state.game, kursi) : null;
+  // Di luar game (lobi atau setelah hasil akhir) tidak ada meja yang perlu ditampilkan ulang.
+  const pandangan = state.fase === 'bermain' && state.game && kursi !== null ? seatView(state.game, kursi) : null;
   return { jenis: 'snapshot', kursi, pandangan, sisaPresentasi: pandangan ? sisa(state, sekarang) : 0 };
 }

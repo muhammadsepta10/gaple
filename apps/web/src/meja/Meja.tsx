@@ -6,7 +6,7 @@ import { DURASI } from '@gaple/ruang';
 import type { Presentation } from '../presentasi';
 import { BigEffect, ChampionBadge, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
-import { layoutChain, tableLayout, type Rect } from './tataLetak';
+import { layoutChain, posisiKursi, tableLayout, type Rect } from './tataLetak';
 
 extend({ Container, Graphics, Text });
 
@@ -19,7 +19,7 @@ type MejaProps = {
   h: number;
   state: GameState;
   seats: readonly SeatInfo[];
-  /** Tata letak mengandaikan kursi manusia 0 (bawah). */
+  /** Kursi manusia di layar ini; selalu digambar di bawah. */
   humanSeat: Seat;
   /** Pemain manusia boleh bertindak sekarang. */
   canAct: boolean;
@@ -29,6 +29,7 @@ type MejaProps = {
 
 export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMove }: MejaProps) {
   const L = useMemo(() => tableLayout(w, h), [w, h]);
+  const pos = (seat: Seat) => posisiKursi(seat, humanSeat);
   const { session } = state;
   const table = useRef<Container>(null);
   const effectStarted = useRef(performance.now());
@@ -75,11 +76,11 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
       const legal = mine && endsFor(card.id).length > 0;
       const lift = mine ? pending === card.id ? 24 : legal ? 10 : 0 : 0;
       const motion = presentation?.kind === 'deal'
-        ? { key: presentation.key, at: presentation.at, from: center, delay: (i * 4 + seat) * DURASI.jedaBagi }
+        ? { key: presentation.key, at: presentation.at, from: center, delay: (i * 4 + pos(seat)) * DURASI.jedaBagi }
         : undefined;
       cards.push(<CardView
         key={card.id}
-        pose={mine ? L.hand(i, hand.length, lift) : L.back(seat, i)}
+        pose={mine ? L.hand(i, hand.length, lift) : L.back(pos(seat), i)}
         face={mine ? { top: card.a, bottom: card.b } : undefined}
         dim={mine && canAct && !legal}
         outline={mine && pending === card.id}
@@ -98,7 +99,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
         key: presentation.key,
         at: presentation.at,
         flip: presentation.seat !== humanSeat,
-        origin: L.back(presentation.seat, session.hands[presentation.seat]!.length),
+        origin: L.back(pos(presentation.seat), session.hands[presentation.seat]!.length),
       } : undefined}
     />);
   }
@@ -107,7 +108,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
       {SEATS.map((seat) => (
         <SeatPill
           key={seat}
-          rect={L.pill(seat)}
+          rect={L.pill(pos(seat))}
           compact={L.compact}
           info={seats[seat]!}
           points={state.totals[seat]!}
@@ -126,11 +127,11 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
             onTap={() => onMove({ seat: humanSeat, cardId: pending, end })}
           />
         ))}
-      {presentation?.kind === 'pass' && <PassBubble key={presentation.key} at={presentation.at} rect={L.pill(presentation.seat)} name={seats[presentation.seat]!.name} />}
+      {presentation?.kind === 'pass' && <PassBubble key={presentation.key} at={presentation.at} rect={L.pill(pos(presentation.seat))} name={seats[presentation.seat]!.name} />}
       {presentation && (presentation.kind === 'balak' || presentation.kind === 'win' || presentation.kind === 'gaplek') &&
         <BigEffect key={presentation.key} event={presentation} seatNames={seats.map((seat) => seat.name)} w={w} h={h} />}
       {presentation?.kind === 'champion' && presentation.seats.map((seat) => (
-        <ChampionBadge key={`${presentation.key}-${seat}`} rect={L.pill(seat)} seat={seat} at={presentation.at} />
+        <ChampionBadge key={`${presentation.key}-${seat}`} rect={L.pill(pos(seat))} posisi={pos(seat)} at={presentation.at} />
       ))}
     </pixiContainer>
   );

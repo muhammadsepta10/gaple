@@ -30,7 +30,7 @@ type Langkah = { readonly sebelum: StateRuang; readonly hasil: Hasil; readonly s
 function jalankan(s: { seedAwal: number; jumlahManusia: number; target: number; aksi: readonly Aksi[] }, batas = 4000): Langkah[] {
   let n = s.seedAwal;
   const benih = () => n++;
-  let state: StateRuang = buatRuang();
+  let state: StateRuang = buatRuang('KODE22');
   for (const token of TOKEN.slice(0, s.jumlahManusia)) {
     state = terapkan(state, { jenis: 'masuk', token, nama: token, versi: VERSI_PROTOKOL }, 0, benih).state;
   }

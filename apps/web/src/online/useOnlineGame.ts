@@ -42,8 +42,10 @@ function hasilGame(events: readonly EventKlien[]): GameResult | null {
  * durasi bersama, dan membuka input hanya pada giliran sendiri setelah jendela presentasi server selesai.
  * Server tidak pernah menunggu klien: klien yang tertinggal melompat ke keadaan terbaru.
  */
-export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSiap: boolean): TampilanGame & { seat: Seat } {
-  const [seat, setSeat] = useState<Seat>(0);
+export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSiap: boolean): TampilanGame & { seat: Seat; kursi: Seat | null } {
+  /** Kursi sendiri; `null` = belum duduk (dikosongkan host). */
+  const [kursi, setKursi] = useState<Seat | null>(null);
+  const seat = kursi ?? 0;
   const [state, setState] = useState<GameState | null>(null);
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -82,6 +84,7 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
 
   const presentasikan = async (t: Transisi, signal: AbortSignal) => {
     setSummary(null);
+    setGameResult(null);
     const bagi = t.events.filter((e) => e.type === 'dealt');
     if (bagi.length > 0) {
       for (const e of bagi) {
@@ -162,11 +165,17 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
       return;
     }
     if (pesan.jenis === 'snapshot') {
-      if (pesan.kursi !== null) setSeat(pesan.kursi);
+      setKursi(pesan.kursi);
       antrean.current = [];
       generasi.current++;
       aborter.current?.abort();
       if (pesan.pandangan) tampilkanAkhir({ events: [], pandangan: pesan.pandangan });
+      else {
+        // Di luar game (lobi, atau kursi diubah setelah hasil akhir): tidak ada meja untuk ditampilkan.
+        setState(null);
+        setSummary(null);
+        setGameResult(null);
+      }
       bukaSetelah(pesan.sisaPresentasi);
       return;
     }
@@ -189,7 +198,7 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
     };
   }, []);
 
-  const canAct = !!state && !busy && !menunggu && jendelaTerbuka && !state.session.result && state.session.turn === seat;
+  const canAct = kursi !== null && !!state && !busy && !menunggu && jendelaTerbuka && !state.session.result && state.session.turn === seat;
 
   const play = useCallback((move: Move) => {
     if (!canAct || move.seat !== seat) return;
@@ -197,5 +206,5 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
     sambungan.pasang(move);
   }, [canAct, seat, sambungan]);
 
-  return { seat, state, presentation, play, canAct, summary, gameResult, redealNotice };
+  return { seat, kursi, state, presentation, play, canAct, summary, gameResult, redealNotice };
 }

@@ -96,4 +96,40 @@ describe('server: ruang privat', () => {
   it('versi protokol berbeda ditolak saat masuk', async () => {
     await expect(colyseus.sdk.create('ruang', { ...opsi('tok-a', 'Budi'), versi: VERSI_PROTOKOL + 1 })).rejects.toThrow(/perlu-pembaruan/);
   });
+
+  it('kode undangan menjadi roomId; teman bergabung lewat kode, memilih kursi, host mengatur dan memulai', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    expect(a.room.roomId).toMatch(/^[A-HJKMNP-Z2-9]{6}$/);
+    const b = rekam(await colyseus.sdk.joinById(a.room.roomId, opsi('tok-b', 'Agus')));
+    b.room.send('pilihKursi', { kursi: 2 });
+    await tunggu(() => a.room.state.kursi[2]?.nama === 'Agus');
+    expect(b.pesan.at(-1)).toEqual({ jenis: 'snapshot', kursi: 2, pandangan: null, sisaPresentasi: 0 });
+
+    b.room.send('aturKonfigurasi', { targetPoin: 50, balakGanda: true });
+    await tunggu(() => b.pesan.some((p) => p.jenis === 'ditolak'));
+    expect(b.pesan.filter((p) => p.jenis === 'ditolak')).toEqual([{ jenis: 'ditolak', alasan: 'bukan-host' }]);
+
+    a.room.send('aturKonfigurasi', { targetPoin: 50, balakGanda: true });
+    a.room.send('pindahkan', { dari: 2, ke: 3 });
+    await tunggu(() => b.room.state.targetPoin === 50 && b.room.state.kursi[3]?.nama === 'Agus');
+    expect(b.room.state.balakGanda).toBe(true);
+
+    a.room.send('pindahkan', { dari: 'dua', ke: 3 });
+    await tunggu(() => a.pesan.some((p) => p.jenis === 'ditolak'));
+    expect(a.pesan.filter((p) => p.jenis === 'ditolak')).toEqual([{ jenis: 'ditolak', alasan: 'perintah-tidak-sah' }]);
+
+    a.room.send('mulai');
+    await tunggu(() => b.pesan.some((p) => p.jenis === 'transisi') && a.room.state.fase === 'bermain');
+    expect(a.room.state.kursi.map((k: { jenis: string }) => k.jenis)).toEqual(['manusia', 'bot', 'bot', 'manusia']);
+    expect(b.pesan.find((p) => p.jenis === 'transisi')).toMatchObject({ pandangan: { seat: 3, config: { targetPoints: 50, doubleBalak: true } } });
+  });
+
+  it('kode yang tidak ada ditolak', async () => {
+    await expect(colyseus.sdk.joinById('ZZZZZZ', opsi('tok-a', 'Budi'))).rejects.toThrow(/not found/);
+  });
+
+  it('nama bentrok ditolak saat bergabung', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    await expect(colyseus.sdk.joinById(a.room.roomId, opsi('tok-b', 'budi'))).rejects.toThrow(/nama-dipakai/);
+  });
 });

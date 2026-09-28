@@ -112,6 +112,12 @@ function Table({
   );
 }
 
+/** Kode dari tautan ruang `/r/<kode>`, jika aplikasi dibuka lewat tautan. */
+function kodeDariTautan(): string | null {
+  const cocok = location.pathname.slice(import.meta.env.BASE_URL.length).match(/^r\/([^/]+)\/?$/);
+  return cocok ? cocok[1]! : null;
+}
+
 export function App() {
   const [audio] = useState(() => new Suara());
   const [muted, setMuted] = useState(audio.muted);
@@ -124,7 +130,8 @@ export function App() {
     audio.setMuted(!audio.muted);
     setMuted(audio.muted);
   };
-  const [screen, setScreen] = useState<'menu' | 'meja' | 'online'>('menu');
+  const [kodeAwal, setKodeAwal] = useState(kodeDariTautan);
+  const [screen, setScreen] = useState<'menu' | 'meja' | 'online'>(kodeAwal ? 'online' : 'menu');
   const [config, setConfig] = useState<Partial<GameConfig>>({});
   const [gambar, setGambar] = useState<GambarMeja>(gambarMejaAwal);
   useEffect(() => { if (gambar !== 'hijau') pilihGambarMeja(gambar); }, []);
@@ -133,7 +140,12 @@ export function App() {
   // "kembali ke menu" mengatur ulang ke bawaan.
   const toMenuKeepConfig = () => setScreen('menu');
   if (screen === 'online') {
-    return <LayarOnline audio={audio} muted={muted} onMute={toggleMute} gambar={gambar} onKeluar={() => setScreen('menu')} />;
+    const keluar = () => {
+      history.replaceState(null, '', import.meta.env.BASE_URL);
+      setKodeAwal(null);
+      setScreen('menu');
+    };
+    return <LayarOnline audio={audio} muted={muted} onMute={toggleMute} gambar={gambar} kodeAwal={kodeAwal} onKeluar={keluar} />;
   }
   return screen === 'menu' ? (
     <Menu

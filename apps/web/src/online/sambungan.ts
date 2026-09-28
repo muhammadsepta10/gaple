@@ -1,6 +1,6 @@
 import { Client, type Room } from '@colyseus/sdk';
-import type { Move } from '@gaple/aturan';
-import { VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan } from '@gaple/ruang';
+import type { GameConfig, Move, Seat } from '@gaple/aturan';
+import { PANJANG_NAMA_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan } from '@gaple/ruang';
 
 /** Proyeksi lobi publik dari Schema. */
 export type LobiKlien = {
@@ -43,19 +43,44 @@ function alamatServer(): string {
   return import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin;
 }
 
+export const PESAN_NAMA_TIDAK_SAH = `Nama panggilan harus 1–${PANJANG_NAMA_MAKS} karakter.`;
+
 const PESAN_TOLAK: Partial<Record<AlasanTolak, string>> = {
   'perlu-pembaruan': 'Versi aplikasi perlu diperbarui. Muat ulang halaman.',
-  'nama-tidak-sah': 'Nama panggilan harus 1–12 karakter.',
-  'nama-dipakai': 'Nama panggilan sudah dipakai di ruang ini.',
+  'nama-tidak-sah': PESAN_NAMA_TIDAK_SAH,
+  'nama-dipakai': 'Nama panggilan sudah dipakai di ruang ini. Pilih nama lain.',
   'ruang-penuh': 'Ruang sudah penuh.',
-  'game-berjalan': 'Game sedang berjalan.',
+  'game-berjalan': 'Game sedang berjalan. Coba lagi setelah game selesai.',
+  'bukan-host': 'Hanya host yang bisa melakukan itu.',
+  'kursi-terisi': 'Kursi itu sudah diisi pemain lain.',
+  'kursi-kosong': 'Kursi itu sudah kosong.',
+  'kursi-host': 'Host tidak bisa mengosongkan kursinya sendiri.',
+  'konfigurasi-tidak-sah': `Target poin harus bilangan bulat 1–${TARGET_POIN_MAKS}.`,
 };
 
-/** Pesan yang bisa ditampilkan untuk kegagalan masuk ruang. */
-export function pesanGagal(err: unknown): string {
+export const PESAN_KODE_TIDAK_ADA = 'Kode ruang tidak ditemukan. Minta tautan atau kode baru ke host.';
+
+/** Alasan penolakan masuk ruang dari server, atau `null` jika gagal karena hal lain. */
+export function alasanGagal(err: unknown): AlasanTolak | null {
   const alasan = err instanceof Error ? err.message : '';
-  return PESAN_TOLAK[alasan as AlasanTolak] ?? 'Tidak bisa tersambung ke server. Periksa koneksi internet.';
+  return alasan in PESAN_TOLAK ? alasan as AlasanTolak : null;
 }
+
+/** Pesan yang bisa ditampilkan untuk kegagalan masuk ruang atau perintah yang ditolak. */
+export function pesanGagal(err: unknown): string {
+  const alasan = alasanGagal(err);
+  if (alasan) return PESAN_TOLAK[alasan]!;
+  // Colyseus: MATCHMAKE_INVALID_ROOM_ID (kode tidak ada atau ruang sudah dihapus).
+  if (err instanceof Error && ((err as { code?: number }).code === 522 || /room ".*" (not found|has been disposed)/.test(err.message))) {
+    return PESAN_KODE_TIDAK_ADA;
+  }
+  return 'Tidak bisa tersambung ke server. Periksa koneksi internet.';
+}
+
+export const pesanTolak = (alasan: AlasanTolak) => PESAN_TOLAK[alasan] ?? null;
+
+/** Tautan ruang yang bisa dibagikan. */
+export const tautanRuang = (kode: string) => `${location.origin}${import.meta.env.BASE_URL}r/${kode}`;
 
 /**
  * Satu koneksi ke ruang. Pendengar dipasang segera setelah bergabung supaya snapshot
@@ -65,10 +90,12 @@ export class SambunganRuang {
   private antrean: Pesan[] = [];
   private pendengar: ((pesan: Pesan) => void) | null = null;
   private pendengarLobi = new Set<() => void>();
+  private pendengarTolak = new Set<(alasan: AlasanTolak) => void>();
   private lobi: LobiKlien | null = null;
 
   constructor(private readonly room: Room) {
     room.onMessage('pesan', (pesan: Pesan) => {
+      if (pesan.jenis === 'ditolak') for (const fn of this.pendengarTolak) fn(pesan.alasan);
       if (this.pendengar) this.pendengar(pesan);
       else this.antrean.push(pesan);
     });
@@ -91,6 +118,25 @@ export class SambunganRuang {
 
   lobiSekarang = (): LobiKlien | null => this.lobi;
 
+  /** Penolakan perintah dari server (hanya untuk pengirimnya). */
+  dengarTolak(fn: (alasan: AlasanTolak) => void): () => void {
+    this.pendengarTolak.add(fn);
+    return () => this.pendengarTolak.delete(fn);
+  }
+
+  /** Kode undangan = roomId. */
+  get kode(): string { return this.room.roomId; }
+
+  pilihKursi(kursi: Seat) { this.room.send('pilihKursi', { kursi }); }
+
+  pindahkan(dari: Seat, ke: Seat) { this.room.send('pindahkan', { dari, ke }); }
+
+  kosongkan(kursi: Seat) { this.room.send('kosongkan', { kursi }); }
+
+  aturKonfigurasi(config: GameConfig) {
+    this.room.send('aturKonfigurasi', { targetPoin: config.targetPoints, balakGanda: config.doubleBalak });
+  }
+
   mulai() { this.room.send('mulai'); }
 
   pasang(move: Move) { this.room.send('pasang', { cardId: move.cardId, end: move.end }); }
@@ -101,5 +147,15 @@ export class SambunganRuang {
 export async function sambungRuangBaru(nama: string): Promise<SambunganRuang> {
   const room = await new Client(alamatServer()).create('ruang', { token: tokenPemain(), nama, versi: VERSI_PROTOKOL });
   tulis(KUNCI_NAMA, nama.trim());
+  return new SambunganRuang(room);
+}
+
+/**
+ * Bergabung ke ruang lewat kode undangan yang sudah dinormalisasi. Token yang dikenal ruang
+ * langsung kembali ke tempatnya, jadi `nama` boleh kosong untuk percobaan pertama.
+ */
+export async function sambungRuang(kode: string, nama: string): Promise<SambunganRuang> {
+  const room = await new Client(alamatServer()).joinById(kode, { token: tokenPemain(), nama, versi: VERSI_PROTOKOL });
+  if (nama.trim()) tulis(KUNCI_NAMA, nama.trim());
   return new SambunganRuang(room);
 }

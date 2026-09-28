@@ -103,11 +103,11 @@ export function BigEffect({ event, seatNames, w, h }: { event: BigEvent; seatNam
 }
 
 /** Penanda juara ditempel di dekat kursi juara, tanpa menutupi seluruh meja. */
-export function ChampionBadge({ rect, seat, at }: { rect: Rect; seat: Seat; at: number }) {
+export function ChampionBadge({ rect, posisi, at }: { rect: Rect; posisi: Seat; at: number }) {
   const background = useRef<Graphics>(null);
   const label = useRef<Text>(null);
   const x = rect.x + rect.w / 2;
-  const y = seat === 2 ? rect.y + rect.h + 19 : rect.y - 19;
+  const y = posisi === 2 ? rect.y + rect.h + 19 : rect.y - 19;
   useTick(() => {
     const t = Math.min(1, (performance.now() - at) / DURASI.juara);
     const alpha = Math.min(1, t * 8) * Math.min(1, (1 - t) * 5);
