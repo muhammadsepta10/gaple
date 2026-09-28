@@ -8,19 +8,20 @@ Glosarium permainan gaple berdasarkan kebiasaan bermain pengguna bersama tiga te
 Permainan yang dimainkan oleh tepat empat **Pemain** dengan **Aturan kelompok**.
 
 **Game**:
-Rangkaian **Sesi** dengan **Total poin** yang terakumulasi untuk setiap pemain, berakhir ketika ada pemain yang mencapai atau melewati **Target poin** setelah perhitungan poin sesi. Hasilnya dapat berupa satu atau beberapa **Juara 1**, atau seluruh pemain **Kalah**.
+Rangkaian **Ronde** dengan **Total poin** yang terakumulasi untuk setiap pemain, berakhir ketika ada pemain yang mencapai atau melewati **Target poin** setelah perhitungan poin ronde. Hasilnya dapat berupa satu atau beberapa **Juara 1**, atau seluruh pemain **Kalah**.
 
-**Sesi**:
-Bagian dari satu **Game** yang berakhir ketika seorang pemain menghabiskan kartunya atau terjadi **Gaplek**. Sisa kartu setiap pemain menghasilkan **Poin sesi**.
+**Ronde**:
+Bagian dari satu **Game** yang berakhir ketika seorang pemain menghabiskan kartunya atau terjadi **Gaplek**. Sisa kartu setiap pemain menghasilkan **Poin ronde**.
+_Avoid_: Sesi (istilah lama, diganti ronde atas permintaan pengguna)
 
-**Pemenang sesi**:
-Pemain yang pertama menghabiskan seluruh **Kartu** dalam satu **Sesi**. Hanya satu pemain dapat menang dengan cara ini, termasuk ketika kartu terakhirnya sekaligus membuat susunan buntu.
+**Pemenang ronde**:
+Pemain yang pertama menghabiskan seluruh **Kartu** dalam satu **Ronde**. Hanya satu pemain dapat menang dengan cara ini, termasuk ketika kartu terakhirnya sekaligus membuat susunan buntu.
 
 **Pemain**:
 Peserta dalam permainan **Gaple**, baik manusia maupun **Bot**. Setiap permainan memiliki tepat empat pemain yang masing-masing bermain untuk dirinya sendiri.
 
 **Giliran**:
-Kesempatan seorang **Pemain** untuk bertindak dalam **Sesi**. Urutan giliran berjalan searah jarum jam.
+Kesempatan seorang **Pemain** untuk bertindak dalam **Ronde**. Urutan giliran berjalan searah jarum jam.
 
 **Kartu**:
 Keping domino dengan dua bagian, masing-masing bernilai 0 sampai 6.
@@ -33,10 +34,10 @@ Kumpulan 28 **Kartu** yang mencakup setiap pasangan unik nilai 0 sampai 6, masin
 **Kartu** dengan nilai yang sama pada kedua bagiannya. Balak 0 berarti kartu 0–0, sedangkan balak 6 berarti kartu 6–6.
 
 **Balak 0 mati**:
-Kondisi saat **Sesi** berakhir ketika seorang pemain masih memegang balak 0 dan tidak ada pemain mana pun, termasuk dirinya, yang memegang kartu berangka 0 lainnya. Balak 0 mati bernilai 25 **Poin sesi**, bukan 0.
+Kondisi saat **Ronde** berakhir ketika seorang pemain masih memegang balak 0 dan tidak ada pemain mana pun, termasuk dirinya, yang memegang kartu berangka 0 lainnya. Balak 0 mati bernilai 25 **Poin ronde**, bukan 0.
 
 **Balak ganda**:
-Opsi aturan yang, jika aktif, membuat balak 1 sampai balak 6 yang masih dipegang saat **Sesi** berakhir bernilai dua kali lipat dalam **Poin sesi**.
+Opsi aturan yang, jika aktif, membuat balak 1 sampai balak 6 yang masih dipegang saat **Ronde** berakhir bernilai dua kali lipat dalam **Poin ronde**.
 
 **Ujung susunan**:
 Salah satu dari dua ujung terbuka rangkaian **Kartu** di meja. Kartu baru dapat disambungkan pada ujung yang nilainya cocok dengan bagian kartu yang bersentuhan.
@@ -45,19 +46,19 @@ Salah satu dari dua ujung terbuka rangkaian **Kartu** di meja. Kartu baru dapat 
 Lewat **Giliran** karena tidak ada satu pun **Kartu** di tangan pemain yang dapat dipasang. Giliran berpindah ke pemain berikutnya tanpa tambahan penalti poin.
 
 **Gaplek**:
-Kondisi buntu ketika seluruh pemain tidak dapat melanjutkan susunan kartu dan belum ada pemain yang menghabiskan kartunya, sehingga **Sesi** berakhir. Gaplek 6 adalah kondisi ini ketika kedua ujung susunan bernilai 6.
+Kondisi buntu ketika seluruh pemain tidak dapat melanjutkan susunan kartu dan belum ada pemain yang menghabiskan kartunya, sehingga **Ronde** berakhir. Gaplek 6 adalah kondisi ini ketika kedua ujung susunan bernilai 6.
 
-**Poin sesi**:
-Jumlah nilai kedua bagian dari seluruh **Kartu** yang masih dipegang seorang pemain saat **Sesi** berakhir, dengan pengecualian **Balak 0 mati** yang bernilai 25. Pemain yang kartunya habis memperoleh nol poin sesi.
+**Poin ronde**:
+Jumlah nilai kedua bagian dari seluruh **Kartu** yang masih dipegang seorang pemain saat **Ronde** berakhir, dengan pengecualian **Balak 0 mati** yang bernilai 25. Pemain yang kartunya habis memperoleh nol poin ronde.
 
 **Total poin**:
-Akumulasi **Poin sesi** seorang pemain sepanjang satu **Game**. Total poin setiap pemain dimulai dari nol pada setiap game baru.
+Akumulasi **Poin ronde** seorang pemain sepanjang satu **Game**. Total poin setiap pemain dimulai dari nol pada setiap game baru.
 
 **Target poin**:
-Batas **Total poin** untuk mengakhiri satu **Game**, ditetapkan sebelum game dimulai. Mencapai atau melewati batas ini sama-sama mengakhiri game setelah poin seluruh pemain pada sesi tersebut dihitung.
+Batas **Total poin** untuk mengakhiri satu **Game**, ditetapkan sebelum game dimulai. Mencapai atau melewati batas ini sama-sama mengakhiri game setelah poin seluruh pemain pada ronde tersebut dihitung.
 
 **Kalah**:
-Status pemain yang **Total poin**-nya mencapai atau melewati **Target poin** pada sesi penutup game. Beberapa pemain dapat dinyatakan kalah bersama jika mencapai batas pada sesi yang sama.
+Status pemain yang **Total poin**-nya mencapai atau melewati **Target poin** pada ronde penutup game. Beberapa pemain dapat dinyatakan kalah bersama jika mencapai batas pada ronde yang sama.
 
 **Juara 1**:
 Peringkat pemenang **Game** berdasarkan **Total poin** terendah yang masih di bawah **Target poin**. Semua pemain dengan total terendah yang sama mendapat juara 1 bersama; jika seluruh pemain kalah, tidak ada juara 1.
@@ -93,13 +94,13 @@ Gambar yang menentukan tampilan meja permainan. Setiap pemain memilih gambar mej
 
 ## Flagged ambiguities
 
-- **Gaple** adalah nama permainan; **Gaplek** adalah kondisi buntu yang mengakhiri sesi.
+- **Gaple** adalah nama permainan; **Gaplek** adalah kondisi buntu yang mengakhiri ronde.
 - **Pass** berlaku ketika seorang pemain tidak dapat jalan; **Gaplek** terjadi ketika seluruh pemain tidak dapat jalan.
-- Kartu habis didahulukan atas susunan buntu dalam menentukan **Pemenang sesi** dan pembuka sesi lanjutan.
-- **Game** mencakup beberapa **Sesi**. Hanya satu **Pemenang sesi** karena kartu habis, sedangkan **Juara 1** pada akhir game dapat dimiliki beberapa pemain dengan total poin terendah yang sama.
+- Kartu habis didahulukan atas susunan buntu dalam menentukan **Pemenang ronde** dan pembuka ronde lanjutan.
+- **Game** mencakup beberapa **Ronde**. Hanya satu **Pemenang ronde** karena kartu habis, sedangkan **Juara 1** pada akhir game dapat dimiliki beberapa pemain dengan total poin terendah yang sama.
 - **Kartu** dan istilah sebelumnya, batu, merujuk pada keping domino yang sama. Dokumentasi aturan menggunakan kartu, mengikuti istilah pengguna.
 - Jika seluruh pemain mencapai atau melewati target, semuanya **Kalah** dan tidak ada **Juara 1**.
-- **Total poin** berlanjut antar sesi dalam game yang sama dan kembali nol ketika game baru dimulai.
+- **Total poin** berlanjut antar ronde dalam game yang sama dan kembali nol ketika game baru dimulai.
 
 ## Example dialogue
 
@@ -119,13 +120,13 @@ Gambar yang menentukan tampilan meja permainan. Setiap pemain memilih gambar mej
 
 **Pengguna:** Tidak. Di mode offline, saya bermain melawan tiga bot sehingga tetap ada empat pemain.
 
-**Pengembang:** Sesi selesai dan saya masih memegang balak 6. Berapa poin dari kartu itu?
+**Pengembang:** Ronde selesai dan saya masih memegang balak 6. Berapa poin dari kartu itu?
 
-**Pengguna:** Dua belas poin sesi, lalu ditambahkan ke total poin kamu dalam game ini.
+**Pengguna:** Dua belas poin ronde, lalu ditambahkan ke total poin kamu dalam game ini.
 
 **Pengembang:** Jika Joko menghabiskan kartunya, apakah dia langsung menjadi pemenang game?
 
-**Pengguna:** Dia menang sesi dan mendapat giliran pertama pada sesi berikutnya. Pemenang game ditentukan berdasarkan total poin.
+**Pengguna:** Dia menang ronde dan mendapat giliran pertama pada ronde berikutnya. Pemenang game ditentukan berdasarkan total poin.
 
 **Pengembang:** Target 100. Total akhir Anwar dan Agus sama-sama 20, Joko 105, dan Budi 112. Siapa yang menang dan kalah?
 

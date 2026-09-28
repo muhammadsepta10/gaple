@@ -1,6 +1,6 @@
 # 02 — Aturan kelompok lengkap per sesi
 
-Status: ready-for-agent
+Status: done
 Blocked by: 01
 
 ## Parent

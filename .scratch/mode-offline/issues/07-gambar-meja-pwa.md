@@ -1,6 +1,6 @@
 # 07 — Gambar meja dan PWA offline
 
-Status: ready-for-agent
+Status: done
 Blocked by: 06
 
 ## Parent

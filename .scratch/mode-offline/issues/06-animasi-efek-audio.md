@@ -1,6 +1,6 @@
 # 06 — Animasi, efek besar, dan audio
 
-Status: ready-for-agent
+Status: done
 Blocked by: 03, 05
 
 ## Parent

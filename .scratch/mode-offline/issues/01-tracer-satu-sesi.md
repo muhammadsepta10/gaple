@@ -1,6 +1,6 @@
 # 01 — Tracer: satu sesi bisa dimainkan
 
-Status: ready-for-agent
+Status: done
 Blocked by: None
 
 ## Parent

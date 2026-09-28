@@ -1,6 +1,6 @@
 # 05 — Meja final: rantai melipat dan tata letak responsif
 
-Status: ready-for-agent
+Status: done
 Blocked by: 01
 
 ## Parent

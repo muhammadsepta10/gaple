@@ -1,6 +1,6 @@
 # 03 — Akhir game
 
-Status: ready-for-agent
+Status: done
 Blocked by: 02
 
 ## Parent

@@ -1,6 +1,6 @@
 # 04 — Pandangan kursi dan bot strategis
 
-Status: ready-for-agent
+Status: done
 Blocked by: 02
 
 ## Parent
