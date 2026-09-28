@@ -1,7 +1,8 @@
 import { isBalak, type Card } from './kartu';
 import type { Seat } from './kursi';
 
-function cardValue(c: Card, zeroDead: boolean, doubleBalak: boolean): number {
+/** Nilai poin satu kartu yang masih dipegang saat sesi berakhir. */
+export function cardValue(c: Card, zeroDead: boolean, doubleBalak: boolean): number {
   if (isBalak(c)) {
     if (c.a === 0) return zeroDead ? 25 : 0;
     return doubleBalak ? (c.a + c.b) * 2 : c.a + c.b;

@@ -1,7 +1,8 @@
 import {
   applyMove,
-  legalMoves,
+  chooseMove,
   nextSession,
+  seatView,
   seededRandom,
   startGame,
   type Card,
@@ -30,7 +31,7 @@ const randomSeed = () => Math.floor(Math.random() * 2 ** 32);
 
 /**
  * Pengendali game offline: memegang state mesin di memori, meneruskan aksi pemain,
- * dan menjalankan bot (sementara: langkah legal pertama) setelah jeda berpikir.
+ * dan menjalankan bot strategis (hanya melihat pandangan kursinya) setelah jeda berpikir.
  */
 export function useOfflineGame() {
   const [state, setState] = useState<GameState | null>(null);
@@ -80,8 +81,7 @@ export function useOfflineGame() {
   useEffect(() => {
     if (!state || state.session.result || state.session.turn === HUMAN_SEAT) return;
     const id = setTimeout(() => {
-      const move = legalMoves(state)[0];
-      if (move) play(move);
+      play(chooseMove(seatView(state, state.session.turn)));
     }, DURASI.botBerpikir);
     return () => clearTimeout(id);
   }, [state, play]);

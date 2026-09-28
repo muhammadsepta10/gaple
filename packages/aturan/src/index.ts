@@ -1,4 +1,5 @@
 export { seededRandom, type Random } from './acak';
+export { chooseMove } from './bot';
 export { isBalak, otherPip, type Card } from './kartu';
 export {
   SEATS,
@@ -22,3 +23,4 @@ export {
   type SessionState,
   type Transition,
 } from './mesin';
+export { publicView, seatView, type PublicView, type SeatView } from './pandangan';

@@ -132,6 +132,12 @@ export function nextSession(state: GameState, random: Random): Transition {
   return { state: { ...state, session }, events };
 }
 
+/** Nilai kedua ujung setelah `card` dipasang di `end`; pada rantai kosong kartu menjadi kedua ujung. */
+export function endsAfter(ends: Chain['ends'], card: Card, end: End): { left: number; right: number } {
+  if (!ends) return { left: card.a, right: card.b };
+  return { ...ends, [end]: otherPip(card, ends[end]) };
+}
+
 export function legalMoves(state: GameState): Move[] {
   const session = state.session;
   if (session.result) return [];
@@ -174,16 +180,10 @@ export function applyMove(state: GameState, move: Move): MoveResult {
     return reject(session.chain.ends || session.opening.kind === 'free' ? 'card-does-not-fit' : 'must-open-with-balak');
   }
   const ends = session.chain.ends;
-  let placement: Placement;
-  let newEnds: { left: number; right: number };
-  if (!ends) {
-    placement = { seat: move.seat, card, end: 'left', open: card.a };
-    newEnds = { left: card.a, right: card.b };
-  } else {
-    const open = otherPip(card, ends[move.end]);
-    placement = { seat: move.seat, card, end: move.end, open };
-    newEnds = { ...ends, [move.end]: open };
-  }
+  const newEnds = endsAfter(ends, card, move.end);
+  const placement: Placement = ends
+    ? { seat: move.seat, card, end: move.end, open: newEnds[move.end] }
+    : { seat: move.seat, card, end: 'left', open: card.a };
   const hands = session.hands.map((h, i) => (i === move.seat ? h.filter((c) => c.id !== card.id) : h));
   const events: GameEvent[] = [{ type: 'cardPlaced', seat: move.seat, card, end: placement.end, balak: isBalak(card) }];
   let next: SessionState = {
