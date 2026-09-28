@@ -1,6 +1,7 @@
 import { Application } from '@pixi/react';
 import type { GameConfig } from '@gaple/aturan';
 import { useEffect, useState } from 'react';
+import { Suara } from './audio/suara';
 import { Meja, type SeatInfo } from './meja/Meja';
 import { HUMAN_SEAT, useOfflineGame } from './offline/useOfflineGame';
 
@@ -41,7 +42,7 @@ function useWindowSize() {
   return size;
 }
 
-function Menu({ initial, onStart }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void }) {
+function Menu({ initial, onStart, muted, onMute }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void; muted: boolean; onMute: () => void }) {
   const [targetPoints, setTargetPoints] = useState(initial.targetPoints ?? 100);
   const [doubleBalak, setDoubleBalak] = useState(initial.doubleBalak ?? false);
   return (
@@ -63,6 +64,10 @@ function Menu({ initial, onStart }: { initial: Partial<GameConfig>; onStart: (co
             <input type="checkbox" checked={doubleBalak} onChange={(e) => setDoubleBalak(e.target.checked)} />
             Balak ganda
           </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={muted} onChange={onMute} />
+            Senyapkan efek suara
+          </label>
         </div>
         <button style={button} onClick={() => onStart({ targetPoints, doubleBalak })}>
           Main offline
@@ -77,18 +82,25 @@ const namesFor = (seats: readonly number[]) => seats.map((seat) => SEAT_INFO[sea
 
 function Table({
   config,
+  audio,
+  muted,
+  onMute,
   onExit,
   onPlayAgain,
   onBackToMenu,
 }: {
   config: Partial<GameConfig>;
+  audio: Suara;
+  muted: boolean;
+  onMute: () => void;
   onExit: () => void;
   onPlayAgain: () => void;
   onBackToMenu: () => void;
 }) {
   const { w, h } = useWindowSize();
   const [ready, setReady] = useState(false);
-  const { state, start, play, canAct, summary, gameResult, redealNotice } = useOfflineGame();
+  const { state, presentation, start, play, canAct, summary, gameResult, redealNotice } = useOfflineGame(audio);
+  useEffect(() => () => audio.cancelPending(), [audio]);
   // State meja baru diisi setelah kanvas siap (ADR 0001).
   useEffect(() => {
     if (ready) start(config);
@@ -101,8 +113,13 @@ function Table({
   return (
     <>
       <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} background={0x1d6b45} onInit={() => setReady(true)}>
-        {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} onMove={play} />}
+        {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} presentation={presentation} onMove={play} />}
       </Application>
+      <button onClick={onMute} aria-label={muted ? 'Aktifkan suara' : 'Senyapkan suara'} title={muted ? 'Aktifkan suara' : 'Senyapkan suara'}
+        style={{ position: 'fixed', top: 12, right: 12, zIndex: 2, ...button, padding: '8px 14px', fontSize: 18,
+          background: 'rgba(0,0,0,.65)', color: '#fff' }}>
+        {muted ? '🔇' : '🔊'}
+      </button>
       {!gameResult && (
         <button
           onClick={askExit}
@@ -209,6 +226,17 @@ function Table({
 }
 
 export function App() {
+  const [audio] = useState(() => new Suara());
+  const [muted, setMuted] = useState(audio.muted);
+  useEffect(() => {
+    const unlock = () => audio.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => { window.removeEventListener('pointerdown', unlock); audio.dispose(); };
+  }, [audio]);
+  const toggleMute = () => {
+    audio.setMuted(!audio.muted);
+    setMuted(audio.muted);
+  };
   const [screen, setScreen] = useState<'menu' | 'meja'>('menu');
   const [config, setConfig] = useState<Partial<GameConfig>>({});
   // Keluar dan "main lagi" kembali ke menu dengan target/balak ganda game ini tetap terisi (bisa diubah);
@@ -217,7 +245,10 @@ export function App() {
   return screen === 'menu' ? (
     <Menu
       initial={config}
+      muted={muted}
+      onMute={toggleMute}
       onStart={(cfg) => {
+        audio.unlock();
         setConfig(cfg);
         setScreen('meja');
       }}
@@ -225,6 +256,9 @@ export function App() {
   ) : (
     <Table
       config={config}
+      audio={audio}
+      muted={muted}
+      onMute={toggleMute}
       onExit={toMenuKeepConfig}
       onPlayAgain={toMenuKeepConfig}
       onBackToMenu={() => {

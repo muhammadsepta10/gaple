@@ -1,5 +1,7 @@
 import type { Graphics } from 'pixi.js';
-import { useCallback } from 'react';
+import { useTick } from '@pixi/react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import { DURASI } from '../durasi';
 import { U, type Pose } from './kartuGeometry';
 
 /** Lebar dasar kartu; tinggi 2U. Semua kartu digambar pada ukuran ini lalu diskalakan. */
@@ -43,9 +45,16 @@ type CardProps = {
   dim?: boolean;
   outline?: boolean;
   onTap?: () => void;
+  motion?: { key: number; at: number; from?: Pose; delay?: number; flip?: boolean };
 };
 
-export function CardView({ pose, face, dim, outline, onTap }: CardProps) {
+type Flight = { from: Pose; to: Pose; started: number; delay: number; flip: boolean; revealed: boolean };
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+
+export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps) {
+  const graphic = useRef<Graphics>(null);
+  const renderedPose = useRef<Pose | null>(null);
+  const flight = useRef<Flight | null>(null);
   const draw = useCallback(
     (g: Graphics) => {
       g.clear();
@@ -55,13 +64,66 @@ export function CardView({ pose, face, dim, outline, onTap }: CardProps) {
     },
     [face?.top, face?.bottom, outline],
   );
+  useLayoutEffect(() => {
+    const g = graphic.current;
+    if (!g) return;
+    if (motion) {
+      const from = motion.from ?? renderedPose.current ?? pose;
+      flight.current = {
+        from,
+        to: pose,
+        started: motion.at,
+        delay: motion.delay ?? 0,
+        flip: !!motion.flip,
+        revealed: false,
+      };
+      g.position.set(from.x, from.y);
+      g.rotation = from.rot;
+      g.scale.set(from.scale);
+      if (motion.flip) {
+        g.clear();
+        drawBack(g);
+      }
+    } else {
+      flight.current = null;
+      g.position.set(pose.x, pose.y);
+      g.rotation = pose.rot;
+      g.scale.set(pose.scale);
+      renderedPose.current = pose;
+    }
+  }, [motion?.key, pose.x, pose.y, pose.rot, pose.scale]);
+
+  useTick(() => {
+    const f = flight.current;
+    const g = graphic.current;
+    if (!f || !g) return;
+    const raw = Math.max(0, Math.min(1, (performance.now() - f.started - f.delay) / DURASI.kartuTerbang));
+    const eased = 1 - (1 - raw) ** 3;
+    const current = {
+      x: mix(f.from.x, f.to.x, eased),
+      y: mix(f.from.y, f.to.y, eased),
+      rot: mix(f.from.rot, f.to.rot, eased),
+      scale: mix(f.from.scale, f.to.scale, eased),
+    };
+    g.position.set(current.x, current.y);
+    g.rotation = current.rot;
+    const flipX = f.flip ? Math.max(0.005, Math.abs(1 - 2 * raw)) : 1;
+    g.scale.set(current.scale * flipX, current.scale);
+    if (f.flip && !f.revealed && raw >= 0.5) {
+      f.revealed = true;
+      draw(g);
+    }
+    renderedPose.current = current;
+    if (raw === 1) {
+      flight.current = null;
+      g.scale.set(f.to.scale);
+      renderedPose.current = f.to;
+    }
+  });
   return (
     <pixiGraphics
+      ref={graphic}
       draw={draw}
-      x={pose.x}
-      y={pose.y}
-      rotation={pose.rot}
-      scale={pose.scale}
       alpha={dim ? 0.42 : 1}
       eventMode={onTap ? 'static' : 'none'}
       cursor={onTap ? 'pointer' : undefined}

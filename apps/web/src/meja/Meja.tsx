@@ -3,6 +3,8 @@ import { legalMoves, SEATS, type End, type GameState, type Move, type Seat } fro
 import { Container, Graphics, Text } from 'pixi.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DURASI } from '../durasi';
+import type { Presentation } from '../presentasi';
+import { BigEffect, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
 import { layoutChain, tableLayout, type Rect } from './tataLetak';
 
@@ -21,13 +23,28 @@ type MejaProps = {
   humanSeat: Seat;
   /** Pemain manusia boleh bertindak sekarang. */
   canAct: boolean;
+  presentation: Presentation | null;
   onMove: (move: Move) => void;
 };
 
-/** Meja statis: kursi lawan, rantai melipat, dan tangan pemain. */
-export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProps) {
+export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMove }: MejaProps) {
   const L = useMemo(() => tableLayout(w, h), [w, h]);
   const { session } = state;
+  const table = useRef<Container>(null);
+  const effectStarted = useRef(performance.now());
+  useEffect(() => { effectStarted.current = presentation?.at ?? performance.now(); }, [presentation?.key]);
+  useTick(() => {
+    const node = table.current;
+    if (!node) return;
+    const elapsed = performance.now() - effectStarted.current;
+    const shake = presentation?.kind === 'balak'
+      ? { duration: DURASI.getarBalak, amplitude: 5 }
+      : presentation?.kind === 'gaplek'
+        ? { duration: DURASI.getarGaplek, amplitude: 10 }
+        : null;
+    const force = shake && elapsed < shake.duration ? shake.amplitude * (1 - elapsed / shake.duration) : 0;
+    node.position.set(force * Math.sin(elapsed * 0.22), force * Math.cos(elapsed * 0.29));
+  });
   const [pending, setPending] = useState<string | null>(null);
   useEffect(() => setPending(null), [state]);
 
@@ -53,8 +70,40 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
   }, [w, h]);
 
   const hand = session.hands[humanSeat]!;
+  // Satu array bersaudara menjaga instance CardView saat kartu pindah dari tangan ke rantai.
+  const cards: React.ReactNode[] = [];
+  const center = { x: w / 2, y: h / 2, rot: 0, scale: 0.25 };
+  for (const seat of SEATS) {
+    for (let i = 0; i < session.hands[seat]!.length; i++) {
+      const card = session.hands[seat]![i]!;
+      const mine = seat === humanSeat;
+      const legal = mine && endsFor(card.id).length > 0;
+      const lift = mine ? pending === card.id ? 24 : legal ? 10 : 0 : 0;
+      const motion = presentation?.kind === 'deal'
+        ? { key: presentation.key, at: presentation.at, from: center, delay: (i * 4 + seat) * DURASI.jedaBagi }
+        : undefined;
+      cards.push(<CardView
+        key={card.id}
+        pose={mine ? L.hand(i, hand.length, lift) : L.back(seat, i)}
+        face={mine ? { top: card.a, bottom: card.b } : undefined}
+        dim={mine && canAct && !legal}
+        outline={mine && pending === card.id}
+        onTap={mine && canAct ? () => tapHand(card.id) : undefined}
+        motion={motion}
+      />);
+    }
+  }
+  for (const { placement, pose, face } of chain.poses) {
+    const moving = presentation?.kind === 'move' && presentation.cardId === placement.card.id;
+    cards.push(<CardView
+      key={placement.card.id}
+      pose={pose}
+      face={face}
+      motion={moving ? { key: presentation.key, at: presentation.at, flip: presentation.seat !== humanSeat } : undefined}
+    />);
+  }
   return (
-    <pixiContainer>
+    <pixiContainer ref={table}>
       <pixiGraphics draw={drawTable} />
       {SEATS.map((seat) => (
         <SeatPill
@@ -67,26 +116,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
           turn={!session.result && session.turn === seat}
         />
       ))}
-      {SEATS.filter((s) => s !== humanSeat).map((seat) =>
-        session.hands[seat]!.map((c, i) => <CardView key={c.id} pose={L.back(seat, i)} />),
-      )}
-      {chain.poses.map(({ placement, pose, face }) => (
-        <CardView key={placement.card.id} pose={pose} face={face} />
-      ))}
-      {hand.map((c, i) => {
-        const legal = endsFor(c.id).length > 0;
-        const lift = pending === c.id ? 24 : legal ? 10 : 0;
-        return (
-          <CardView
-            key={c.id}
-            pose={L.hand(i, hand.length, lift)}
-            face={{ top: c.a, bottom: c.b }}
-            dim={canAct && !legal}
-            outline={pending === c.id}
-            onTap={() => tapHand(c.id)}
-          />
-        );
-      })}
+      {cards}
       {pending &&
         (['left', 'right'] as const).map((end) => (
           <EndTarget
@@ -97,6 +127,9 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
             onTap={() => onMove({ seat: humanSeat, cardId: pending, end })}
           />
         ))}
+      {presentation?.kind === 'pass' && <PassBubble key={presentation.key} at={presentation.at} rect={L.pill(presentation.seat)} name={seats[presentation.seat]!.name} />}
+      {presentation && ['balak', 'win', 'gaplek', 'champion'].includes(presentation.kind) &&
+        <BigEffect key={presentation.key} event={presentation} w={w} h={h} />}
     </pixiContainer>
   );
 }
