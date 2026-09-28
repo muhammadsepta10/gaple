@@ -25,7 +25,7 @@ Memungkinkan pengguna dan teman-temannya kembali bermain gaple bersama dari jara
 - Komunikasi di dalam game merupakan fitur masa depan. Untuk kebutuhan awal, pemain dapat menggunakan panggilan WhatsApp atau Discord.
 - Game menggunakan tampilan 2D dengan gambar tajam/HD dan tampilan yang tidak terlalu kompleks.
 - Gaya gambar flat, tetapi dengan animasi yang hidup seperti game kartu Yu-Gi-Oh (kartu bergerak, kilau, dan efek dramatis pada momen penting).
-- Animasi dibagi dua tingkat. Animasi cepat (di bawah 1 detik) untuk kejadian yang sering: pembagian kartu ke tiap kursi, kartu berpindah dari tangan ke ujung susunan, dan tanda pass. Efek besar (1–2 detik, seperti kilau, getar layar, atau teks besar) hanya untuk balak dipasang, kartu terakhir yang memenangkan sesi, gaplek, dan pengumuman juara 1.
+- Animasi dibagi dua tingkat. Animasi cepat untuk kejadian yang sering: pembagian kartu ke tiap kursi, kartu berpindah dari tangan ke ujung susunan, dan tanda pass. Efek besar (seperti kilau, getar layar, atau teks besar) hanya untuk balak dipasang, kartu terakhir yang memenangkan sesi, gaplek, dan pengumuman juara 1. Durasinya mengikuti hasil prototype di bawah.
 - Meskipun beranimasi, game harus terasa cepat dan responsif dengan loading seminimal mungkin.
 - Tata letak meja (hasil prototype): ketiga lawan duduk di sisi meja masing-masing (kiri, atas, kanan) sesuai urutan giliran searah jarum jam. Setiap kursi lawan menampilkan pil info (nama panggilan, total poin, sisa kartu, penanda bot, penanda giliran berdenyut) dan deret punggung kartu. Tangan pemain di bawah berbentuk kipas melengkung dengan kartu besar yang sebagian terpotong tepi layar. Rantai kartu mengisi tengah meja.
 - Rantai kartu melipat seperti ular: tumbuh ke kiri dan kanan dari kartu pertama, berbelok lewat satu kartu penghubung tegak saat mendekati tepi area, lalu berbalik arah di baris berikutnya (ujung kanan melipat ke bawah, ujung kiri ke atas). Balak dipasang melintang. Ukuran kartu di rantai mengecil otomatis agar seluruh rantai (sampai 28 kartu) selalu muat tanpa digeser.
@@ -62,4 +62,4 @@ Memungkinkan pengguna dan teman-temannya kembali bermain gaple bersama dari jara
 - Mode offline sebagai PWA agar dapat berjalan tanpa internet dan dibuka cepat setelah kunjungan pertama.
 - Mode online (tahap 2) memakai server Node.js dengan Colyseus.
 - Suara efek memakai aset Kenney berlisensi CC0 (dikonversi ke .m4a agar dapat diputar di Safari, total di bawah 250 KB) dan suara sintetis yang dibuat dengan Web Audio tanpa file. Audio baru aktif setelah interaksi pertama pemain sesuai aturan browser.
-- Kartu digambar sebagai vektor (SVG). Gambar meja berupa ilustrasi/foto resolusi tinggi; hanya gambar meja yang dipilih yang dimuat.
+- Kartu digambar sebagai vektor (formatnya tidak dikunci; prototype memakai Pixi Graphics yang diskalakan). Gambar meja berupa ilustrasi/foto resolusi tinggi; hanya gambar meja yang dipilih yang dimuat.

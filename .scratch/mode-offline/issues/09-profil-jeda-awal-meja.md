@@ -1,6 +1,6 @@
 # 09 — Profil jeda frame saat awal meja
 
-Status: needs-triage
+Status: wontfix
 Blocked by: 08
 
 ## Parent
@@ -16,3 +16,10 @@ Pengukuran awal build produksi pada Mac Apple M4, Chromium headless 153, menunju
 - Rekam trace Performance saat 5 detik pertama masuk meja; identifikasi penyebab jeda panjang.
 - Jika jeda juga terlihat di perangkat asli, kurangi kerja pada frame awal dan ukur ulang terhadap target yang disetujui di tiket 08.
 - Catat perangkat, versi browser, langkah reproduksi, FPS, dan frame terpanjang sebelum/sesudah perbaikan.
+
+## Comments
+
+### 2026-09-28 — triage
+
+- `wontfix`. Jeda hanya terlihat pada proksi Chromium headless. Uji di HP asli (tiket 08) berjalan normal, tanpa keluhan jeda di awal meja.
+- Buka kembali (`needs-triage`) jika jeda awal meja terasa di perangkat asli.

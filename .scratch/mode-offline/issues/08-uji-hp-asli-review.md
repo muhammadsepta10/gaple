@@ -1,6 +1,6 @@
 # 08 — Uji di HP asli dan review visual
 
-Status: ready-for-human
+Status: done
 Blocked by: 07
 
 ## Parent
@@ -50,3 +50,9 @@ Perbaikan yang ditemukan dicatat sebagai tiket baru.
 - Kandidat visual 844×390: [`../review/844-table.png`](../review/844-table.png), dibandingkan dengan [`../../prototype-meja/shots/D-hp.png`](../../prototype-meja/shots/D-hp.png). Kursi, deret punggung kartu, kipas tangan, dan area rantai mengikuti komposisi prototype. Latar produksi memakai tekstur; prototype memakai warna polos. Efek bergerak dan rantai 28 kartu tetap perlu dilihat saat bermain di HP asli. Keputusan visual tetap milik pengguna.
 - `adb devices -l` tidak menemukan perangkat Android yang tersambung. Ukur di minimal satu HP Android asli; catat model, versi Chrome, ukuran layar, FPS 5 detik awal meja dan 5 detik setelah memasang kartu, serta waktu reload offline sampai menu siap. Jalankan tiga kali pada build produksi yang sama. Catat hasil di sini.
 - Keputusan pengguna masih diperlukan: target 60 fps laptop / 50 fps HP / <2 detik cache (atau angka pengganti), persetujuan visual meja dan efek, serta tiga asumsi di Further Notes spec: gaplek langsung tanpa empat pass; ringkasan 5 detik; nama **Kamu** + nama bot tetap.
+
+### 2026-09-28 — ditutup
+
+- Pengguna menguji di HP asli dan menyatakan permainan berjalan normal. Tiket dinyatakan selesai.
+- Target performa, tampilan meja dan efek, serta tiga asumsi di Further Notes spec (gaplek langsung tanpa empat pass; ringkasan 5 detik; nama **Kamu** + nama bot tetap) diterima sesuai perilaku saat ini.
+- Angka FPS di HP asli tidak dicatat. Jika nanti ada keluhan performa, ukur ulang dengan langkah di komentar persiapan review.
