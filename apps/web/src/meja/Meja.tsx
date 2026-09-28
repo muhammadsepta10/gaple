@@ -1,0 +1,149 @@
+import { extend, useTick } from '@pixi/react';
+import { legalMoves, SEATS, type End, type GameState, type Move, type Seat } from '@gaple/aturan';
+import { Container, Graphics, Text } from 'pixi.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DURASI } from '../durasi';
+import { CardView, GOLD } from './kartu';
+import { chainCells, straightChain, tableLayout, type Rect } from './tataLetak';
+
+extend({ Container, Graphics, Text });
+
+const FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
+export type SeatInfo = { name: string; bot: boolean; points: number };
+
+type MejaProps = {
+  w: number;
+  h: number;
+  state: GameState;
+  seats: readonly SeatInfo[];
+  /** Tata letak mengandaikan kursi manusia 0 (bawah). */
+  humanSeat: Seat;
+  /** Pemain manusia boleh bertindak sekarang. */
+  canAct: boolean;
+  onMove: (move: Move) => void;
+};
+
+/** Meja statis: kursi lawan, rantai lurus, dan tangan pemain. */
+export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProps) {
+  const L = useMemo(() => tableLayout(w, h), [w, h]);
+  const { session } = state;
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => setPending(null), [state]);
+
+  const myMoves = canAct ? legalMoves(state).filter((m) => m.seat === humanSeat) : [];
+  const endsFor = (cardId: string): End[] => myMoves.filter((m) => m.cardId === cardId).map((m) => m.end);
+
+  const tapHand = (cardId: string) => {
+    if (!canAct) return;
+    if (pending === cardId) return setPending(null);
+    const ends = endsFor(cardId);
+    if (ends.length === 1) return onMove({ seat: humanSeat, cardId, end: ends[0]! });
+    setPending(ends.length === 2 ? cardId : null);
+  };
+
+  const chain = useMemo(
+    () => straightChain(chainCells(session.chain.placements), L.chainArea, L.chainMaxS),
+    [session.chain.placements, L],
+  );
+
+  const drawTable = useCallback((g: Graphics) => {
+    g.clear();
+    g.rect(0, 0, w, h).fill(0x1d6b45);
+  }, [w, h]);
+
+  const hand = session.hands[humanSeat]!;
+  return (
+    <pixiContainer>
+      <pixiGraphics draw={drawTable} />
+      {SEATS.map((seat) => (
+        <SeatPill
+          key={seat}
+          rect={L.pill(seat)}
+          compact={L.compact}
+          info={seats[seat]!}
+          count={session.hands[seat]!.length}
+          turn={!session.result && session.turn === seat}
+        />
+      ))}
+      {SEATS.filter((s) => s !== humanSeat).map((seat) =>
+        session.hands[seat]!.map((c, i) => <CardView key={c.id} pose={L.back(seat, i)} />),
+      )}
+      {chain.poses.map(({ cell, pose }) => (
+        <CardView key={cell.card.id} pose={pose} face={{ top: cell.left, bottom: cell.right }} />
+      ))}
+      {hand.map((c, i) => {
+        const legal = endsFor(c.id).length > 0;
+        const lift = pending === c.id ? 24 : legal ? 10 : 0;
+        return (
+          <CardView
+            key={c.id}
+            pose={L.hand(i, hand.length, lift)}
+            face={{ top: c.a, bottom: c.b }}
+            dim={canAct && !legal}
+            outline={pending === c.id}
+            onTap={() => tapHand(c.id)}
+          />
+        );
+      })}
+      {pending &&
+        (['left', 'right'] as const).map((end) => (
+          <EndTarget
+            key={end}
+            x={chain.ends[end].x}
+            y={chain.ends[end].y}
+            size={chain.target}
+            onTap={() => onMove({ seat: humanSeat, cardId: pending, end })}
+          />
+        ))}
+    </pixiContainer>
+  );
+}
+
+function SeatPill({ rect, compact, info, count, turn }: { rect: Rect; compact: boolean; info: SeatInfo; count: number; turn: boolean }) {
+  const { x, y, w, h } = rect;
+  const glow = useRef<Graphics>(null);
+  const draw = useCallback(
+    (g: Graphics) => {
+      g.clear();
+      g.roundRect(x, y, w, h, h / 2)
+        .fill({ color: turn ? 0x3a2a05 : 0x0b1f16, alpha: 0.85 })
+        .stroke({ color: turn ? GOLD : 0xffffff, width: 1.5, alpha: turn ? 1 : 0.25 });
+      if (info.bot) g.roundRect(x + w - 36, y + h / 2 - 8, 28, 16, 8).fill(0x5b6b7a);
+    },
+    [x, y, w, h, turn, info.bot],
+  );
+  // Penanda giliran: garis emas berdenyut.
+  const pulse = useCallback(() => {
+    const g = glow.current;
+    if (!g) return;
+    g.clear();
+    if (!turn) return;
+    const p = (Math.sin(performance.now() / DURASI.denyutGiliran) + 1) / 2;
+    g.roundRect(x - 3 - p * 2, y - 3 - p * 2, w + 6 + p * 4, h + 6 + p * 4, h / 2 + 3).stroke({ color: GOLD, width: 3, alpha: 0.55 + 0.45 * p });
+  }, [x, y, w, h, turn]);
+  useTick(pulse);
+  return (
+    <pixiContainer>
+      <pixiGraphics ref={glow} draw={() => {}} />
+      <pixiGraphics draw={draw} />
+      <pixiText text={info.name} x={x + 12} y={y + (compact ? 4 : 5)} resolution={2} style={{ fill: 0xffffff, fontSize: compact ? 12 : 13, fontWeight: '700', fontFamily: FONT }} />
+      <pixiText text={`${info.points} poin · ${count} kartu`} x={x + 12} y={y + (compact ? 17 : 21)} resolution={2} style={{ fill: 0xcfe3d6, fontSize: compact ? 9.5 : 11, fontFamily: FONT }} />
+      {info.bot && <pixiText text="BOT" anchor={0.5} x={x + w - 22} y={y + h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: 9, fontWeight: '800', fontFamily: FONT }} />}
+    </pixiContainer>
+  );
+}
+
+/** Kotak emas berdenyut di ujung rantai untuk memilih ujung. */
+function EndTarget({ x, y, size, onTap }: { x: number; y: number; size: number; onTap: () => void }) {
+  const g = useRef<Graphics>(null);
+  const pulse = useCallback(() => {
+    const gg = g.current;
+    if (!gg) return;
+    const p = (Math.sin(performance.now() / DURASI.denyutUjung) + 1) / 2;
+    gg.clear();
+    gg.roundRect(x - size / 2, y - size / 2, size, size, 8).fill({ color: GOLD, alpha: 0.25 + 0.35 * p }).stroke({ color: GOLD, width: 3 });
+  }, [x, y, size]);
+  useTick(pulse);
+  return <pixiGraphics ref={g} draw={() => {}} eventMode="static" cursor="pointer" onPointerTap={onTap} />;
+}
