@@ -70,17 +70,24 @@ Pemain yang langkahnya ditentukan secara otomatis oleh game, bertugas menggantik
 Mode bermain sendiri dengan satu pemain manusia melawan tiga **Bot**, sehingga tetap ada empat **Pemain**. Mode ini dapat digunakan untuk latihan atau bermain ketika teman-teman tidak tersedia, termasuk tanpa koneksi internet.
 
 **Nama panggilan**:
-Nama tampilan yang dipilih **Pemain** saat masuk ke **Ruang privat**.
+Nama tampilan yang dipilih **Pemain** saat masuk ke **Ruang privat**. Unik dalam satu ruang tanpa membedakan huruf besar-kecil, dan tetap dipegang pemain yang **Terputus** sampai dia keluar ruang.
 
 **Ruang privat**:
-Tempat berkumpulnya empat **Pemain** untuk bermain gaple online, dibuat oleh salah satu pemain. Teman-temannya bergabung menggunakan tautan atau kode undangan ruang tersebut.
+Tempat berkumpulnya empat **Pemain** untuk bermain gaple online, dibuat oleh salah satu pemain. Teman-temannya bergabung menggunakan tautan atau **Kode undangan** ruang tersebut.
+
+**Kode undangan**:
+Kode pendek yang mengenali satu **Ruang privat**, mudah didiktekan lewat panggilan suara, dan juga tercantum di tautan ruang. Kode tidak berlaku lagi setelah ruangnya dihapus dan tidak pernah dipakai untuk ruang lain.
 
 **Host**:
-Pemain yang memegang kendali **Ruang privat**; awalnya pembuat ruang, lalu berpindah ke pemain manusia berikutnya searah jarum jam jika host diambil alih **Bot**. Berwenang mengatur target poin dan opsi **Balak ganda**, serta memulai game. Untuk hal lain, setara dengan pemain lain.
+Pemain yang memegang kendali **Ruang privat**; awalnya pembuat ruang, lalu berpindah ke pemain manusia berikutnya searah jarum jam yang masih tersambung jika host diambil alih **Bot** saat game berjalan, atau **Terputus** selama 2 menit saat game tidak berjalan. Host lama yang kembali menjadi pemain biasa. Berwenang mengatur target poin dan opsi **Balak ganda**, memindahkan atau mengosongkan **Kursi** pemain lain sebelum game dimulai, serta memulai game. Untuk hal lain, setara dengan pemain lain.
 
 **Penonton**:
 Orang di **Ruang privat** yang tidak menempati **Kursi** selama game berjalan. Dapat melihat meja dan skor, tetapi tidak melihat kartu di tangan pemain mana pun.
 _Avoid_: Spectator
+
+**Terputus**:
+Status pemain manusia yang tidak sedang tersambung ke **Ruang privat**, baik karena koneksi putus, menutup tab, maupun menekan keluar saat game berjalan. Kursinya tetap miliknya, termasuk di antara game, sampai dia menekan keluar ruang saat game tidak berjalan atau **Host** mengosongkan kursinya. Ia kembali ke kursinya dengan membuka tautan ruang dari browser yang sama.
+_Avoid_: Disconnect, offline (bentrok dengan **Mode offline**)
 
 **Kursi**:
 Salah satu dari empat posisi duduk di meja **Ruang privat**. Urutan kursi menentukan urutan **Giliran** searah jarum jam.
