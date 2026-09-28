@@ -1,0 +1,10 @@
+# TLS otomatis (Let's Encrypt) untuk DOMAIN. WebSocket Colyseus diteruskan apa adanya, dan
+# Caddy menambahkan IP klien sebagai hop terakhir X-Forwarded-For (dipakai batas per IP).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:2567
+}

@@ -1,6 +1,8 @@
 import { Room, ServerError, createEndpoint, createRouter, defineRoom, defineServer, matchMaker, type Client } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import express from 'express';
+import path from 'node:path';
 import { SEATS, type Seat } from '@gaple/aturan';
 import {
   KODE_TUTUP_DIGANTIKAN, buatKodeUndangan, buatRuang, jalankanTenggat, proyeksiLobi, pulihkan, terapkan,
@@ -44,6 +46,11 @@ export type KonfigServer = {
   readonly jam?: () => number;
   /** Sumber acak [0, 1) untuk kode undangan; bawaan kriptografis. */
   readonly acakKode?: () => number;
+  /**
+   * Folder hasil build aplikasi web. Jika diisi, web disajikan dari origin yang sama dengan
+   * server (tanpa CORS), termasuk tautan ruang `/r/<kode>`.
+   */
+  readonly web?: string;
 };
 
 /** Seed setiap pembagian kartu dari sumber acak kriptografis. */
@@ -219,6 +226,26 @@ function kelasRuang({ skala, sekarang, batas, penyimpanan, acakKode, siapPulih }
   };
 }
 
+/**
+ * Menyajikan build web: halaman dan service worker selalu diperiksa ulang (versi baru langsung
+ * terlihat, lihat pembaruan paksa di klien), aset ber-hash di-cache setahun.
+ */
+function sajikanWeb(app: express.Application, folder: string) {
+  const halaman = path.join(folder, 'index.html');
+  const tanpaCache = (res: express.Response) => res.setHeader('Cache-Control', 'no-cache');
+  app.get(['/', '/r/:kode'], (_req, res) => {
+    tanpaCache(res);
+    res.sendFile(halaman);
+  });
+  app.use(express.static(folder, {
+    index: false,
+    setHeaders: (res, berkas) => {
+      if (berkas.startsWith(path.join(folder, 'assets') + path.sep)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      else tanpaCache(res);
+    },
+  }));
+}
+
 /** Selang tanda hidup server (waktu ruang); galat waktu henti setelah crash paling banyak sebesar ini. */
 const SELANG_DETAK = 5_000;
 
@@ -243,6 +270,7 @@ export function buatServer(konfig: KonfigServer = {}) {
     transport: new WebSocketTransport(),
     rooms: { ruang: defineRoom(kelasRuang({ skala, sekarang, batas, penyimpanan, acakKode: konfig.acakKode ?? acakKripto, siapPulih })) },
     routes: createRouter({ kesehatan }),
+    ...(konfig.web ? { express: (app: express.Application) => sajikanWeb(app, path.resolve(konfig.web!)) } : {}),
     beforeListen: async () => {
       await matchMaker.onReady;
       // Waktu henti dimulai dari tanda hidup terakhir server sebelumnya, bukan dari perubahan

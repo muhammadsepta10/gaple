@@ -27,3 +27,7 @@ Mode online dipasang di VPS lalu dicoba oleh kelompok aslinya.
 
 - `04-penonton-batas-penyalahgunaan.md`
 - `05-keandalan-redis-versi-protokol.md`
+
+## Comments
+
+- (agen) Sudah disiapkan: `Dockerfile` (multi-stage; server + build web dalam satu image), `docker-compose.yml` (app, Redis AOF dengan volume, Caddy TLS), `Caddyfile`, `.env.example`, dan `scripts/production.sh` (`setup`, `start`, `stop`, `restart`, `restart-app`, `build`, `status`, `ruang`, `logs`, `pull`). Server menyajikan web dari origin yang sama lewat `WEB_DIR`. Diuji lokal dengan `DOMAIN=localhost`: halaman dan `/r/<kode>` lewat HTTPS, ruang dibuat lewat WSS, ruang pulih setelah `restart-app`, `build`, dan restart Redis. Tinggal manusia: VPS, DNS domain, `.env`, lalu `./scripts/production.sh setup`.

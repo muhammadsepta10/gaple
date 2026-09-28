@@ -15,5 +15,6 @@ if (redis) {
   console.warn('gaple: REDIS_URL tidak diisi; ruang disimpan di memori dan hilang saat restart');
 }
 
-await buatServer({ penyimpanan: redis }).listen(port);
+// WEB_DIR (produksi): folder build aplikasi web, disajikan dari origin yang sama.
+await buatServer({ penyimpanan: redis, web: process.env.WEB_DIR }).listen(port);
 console.log(`gaple server: port ${port}`);

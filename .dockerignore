@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+.git
+.scratch
+docs
+test-results
+playwright-report
+**/test
+**/e2e
+*.md
+.env
+.env.*
+docker-data
+.DS_Store

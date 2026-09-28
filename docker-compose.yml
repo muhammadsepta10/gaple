@@ -1,0 +1,56 @@
+# Gaple produksi: satu VPS kecil. Caddy (TLS + WebSocket) → app (Colyseus + web statis) → Redis (AOF).
+# Kelola lewat ./scripts/production.sh.
+
+name: gaple
+
+services:
+  app:
+    build: .
+    image: gaple-app:latest
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      PORT: 2567
+    # Endpoint /kesehatan (jumlah ruang aktif) hanya dari mesin ini, untuk perawatan.
+    ports:
+      - "127.0.0.1:2567:2567"
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Waktu untuk shutdown Colyseus menyimpan snapshot terakhir sebelum dipaksa berhenti.
+    stop_grace_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF wajib (ADR 0003): ruang selamat dari restart Redis, kehilangan paling banyak ~1 detik.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?isi DOMAIN di .env}
+      ACME_EMAIL: ${ACME_EMAIL:?isi ACME_EMAIL di .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:

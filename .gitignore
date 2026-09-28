@@ -11,3 +11,6 @@ playwright-report/
 !.scratch/prototype-meja/public/
 .scratch/prototype-meja/public/*
 !.scratch/prototype-meja/public/sfx/
+
+# Konfigurasi produksi lokal (lihat .env.example)
+.env
