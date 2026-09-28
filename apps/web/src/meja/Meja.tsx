@@ -4,7 +4,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DURASI } from '../durasi';
 import type { Presentation } from '../presentasi';
-import { BigEffect, PassBubble } from './efek';
+import { BigEffect, ChampionBadge, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
 import { layoutChain, tableLayout, type Rect } from './tataLetak';
 
@@ -122,8 +122,11 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
           />
         ))}
       {presentation?.kind === 'pass' && <PassBubble key={presentation.key} at={presentation.at} rect={L.pill(presentation.seat)} name={seats[presentation.seat]!.name} />}
-      {presentation && ['balak', 'win', 'gaplek', 'champion'].includes(presentation.kind) &&
-        <BigEffect key={presentation.key} event={presentation} w={w} h={h} />}
+      {presentation && (presentation.kind === 'balak' || presentation.kind === 'win' || presentation.kind === 'gaplek') &&
+        <BigEffect key={presentation.key} event={presentation} seatNames={seats.map((seat) => seat.name)} w={w} h={h} />}
+      {presentation?.kind === 'champion' && presentation.seats.map((seat) => (
+        <ChampionBadge key={`${presentation.key}-${seat}`} rect={L.pill(seat)} seat={seat} at={presentation.at} />
+      ))}
     </pixiContainer>
   );
 }

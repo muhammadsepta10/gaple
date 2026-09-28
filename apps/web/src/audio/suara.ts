@@ -8,6 +8,18 @@ const SAMPLES = [
 ] as const;
 type Sample = typeof SAMPLES[number];
 
+type Fallback = { length: number; from: number; to: number; noise: number; volume: number };
+
+function fallbackFor(name: Sample): Fallback {
+  if (name.startsWith('card-place-')) return { length: 0.14, from: 500, to: 180, noise: 0.8, volume: 0.16 };
+  if (name === 'question_001') return { length: 0.24, from: 440, to: 700, noise: 0.05, volume: 0.1 };
+  if (name === 'impactPunch_heavy_001') return { length: 0.28, from: 190, to: 55, noise: 0.65, volume: 0.2 };
+  if (name === 'glass_002') return { length: 0.19, from: 1550, to: 920, noise: 0.3, volume: 0.1 };
+  if (name === 'lowThreeTone') return { length: 0.48, from: 330, to: 110, noise: 0.04, volume: 0.13 };
+  if (name === 'chips-stack-1') return { length: 0.23, from: 800, to: 420, noise: 0.7, volume: 0.11 };
+  return { length: 0.35, from: name === 'powerUp9' ? 320 : 480, to: name === 'powerUp9' ? 800 : 1100, noise: 0.08, volume: 0.11 };
+}
+
 function storedMute(): boolean {
   try { return localStorage.getItem(STORAGE_KEY) === 'true'; }
   catch { return false; }
@@ -19,7 +31,7 @@ export class Suara {
   private context: AudioContext | null = null;
   private output: GainNode | null = null;
   private buffers = new Map<Sample, AudioBuffer>();
-  private loading = false;
+  private loading = new Set<Sample>();
   private timers = new Set<ReturnType<typeof setTimeout>>();
 
   setMuted(value: boolean) {
@@ -37,10 +49,10 @@ export class Suara {
         this.output.connect(this.context.destination);
       } catch { return; }
     }
-    void this.context.resume().catch(() => {});
-    if (this.loading) return;
-    this.loading = true;
+    if (this.context.state !== 'running') void this.context.resume().catch(() => {});
     for (const sample of SAMPLES) {
+      if (this.buffers.has(sample) || this.loading.has(sample)) continue;
+      this.loading.add(sample);
       void fetch(`${import.meta.env.BASE_URL}sfx/${sample}.m4a`)
         .then((response) => {
           if (!response.ok) throw new Error(`audio ${response.status}`);
@@ -48,19 +60,35 @@ export class Suara {
         })
         .then((data) => this.context?.decodeAudioData(data))
         .then((buffer) => { if (buffer) this.buffers.set(sample, buffer); })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => this.loading.delete(sample));
     }
   }
 
   private sample(name: Sample, rate = 1) {
     const ctx = this.context;
-    const buffer = this.buffers.get(name);
-    if (this.muted || !ctx || ctx.state !== 'running' || !buffer) return;
+    if (this.muted || !ctx || ctx.state !== 'running') return;
     const source = ctx.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = this.buffers.get(name) ?? this.fallbackSample(ctx, name);
     source.playbackRate.value = rate;
     source.connect(this.output ?? ctx.destination);
     source.start();
+  }
+
+  /** Suara cadangan singkat menjaga momen efek tetap terdengar selama sampel dimuat. */
+  private fallbackSample(ctx: AudioContext, name: Sample): AudioBuffer {
+    const { length, from, to, noise, volume } = fallbackFor(name);
+    const size = Math.ceil(ctx.sampleRate * length);
+    const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i++) {
+      const t = i / ctx.sampleRate;
+      const progress = t / length;
+      const phase = 2 * Math.PI * (from * t + (to - from) * t * progress / 2);
+      const envelope = (1 - progress) ** 2;
+      data[i] = (Math.sin(phase) * (1 - noise) + (Math.random() * 2 - 1) * noise) * envelope * volume;
+    }
+    return buffer;
   }
 
   private later(ms: number, fn: () => void) {

@@ -142,7 +142,7 @@ export function useOfflineGame(audio: Suara) {
         }
       } else if (event.type === 'gameEnded') {
         if (event.result.champions.length) {
-          present({ kind: 'champion' });
+          present({ kind: 'champion', seats: event.result.champions });
           audio.champion();
           if (!await wait(DURASI.juara, signal)) return;
         }

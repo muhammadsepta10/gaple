@@ -3,6 +3,7 @@ import { legalMoves, type GameConfig } from '@gaple/aturan';
 import { useEffect, useState } from 'react';
 import { Suara } from './audio/suara';
 import { GAMBAR_MEJA, gambarMejaAwal, gambarMejaUrl, pilihGambarMeja, type GambarMeja } from './gambarMeja';
+import { HasilAkhir } from './hasilAkhir';
 import { Meja, type SeatInfo } from './meja/Meja';
 import { HUMAN_SEAT, useOfflineGame } from './offline/useOfflineGame';
 
@@ -89,9 +90,6 @@ function Menu({ initial, onStart, muted, onMute, gambar, onGambar }: { initial: 
     </div>
   );
 }
-
-/** Gabungkan nama kursi jadi satu daftar terpisah koma, untuk daftar juara 1/kalah di layar hasil. */
-const namesFor = (seats: readonly number[]) => seats.map((seat) => SEAT_INFO[seat]!.name).join(', ');
 
 function Table({
   config,
@@ -190,9 +188,7 @@ function Table({
           <div style={{ textAlign: 'center', minWidth: 300 }}>
             <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>
               {summary.cause.kind === 'emptyHand'
-                ? summary.cause.winner === HUMAN_SEAT
-                  ? 'Kamu menang sesi!'
-                  : `${SEAT_INFO[summary.cause.winner]!.name} menang sesi`
+                ? `${SEAT_INFO[summary.cause.winner]!.name} Menang!`
                 : `Gaplek ${summary.cause.pip}`}
             </h2>
             <table style={{ margin: '0 auto', borderCollapse: 'collapse', fontSize: 15 }}>
@@ -200,7 +196,7 @@ function Table({
                 <tr style={{ opacity: 0.7 }}>
                   <th style={{ padding: '2px 12px', textAlign: 'left' }} />
                   <th style={{ padding: '2px 12px' }}>Sisa kartu</th>
-                  <th style={{ padding: '2px 12px' }}>Poin sesi</th>
+                  <th style={{ padding: '2px 12px' }}>Poin ronde</th>
                   <th style={{ padding: '2px 12px' }}>Total</th>
                 </tr>
               </thead>
@@ -218,26 +214,8 @@ function Table({
           </div>
         </div>
       )}
-      {gameResult && (
-        <div style={overlay}>
-          <div style={{ textAlign: 'center', minWidth: 300 }}>
-            <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>Game berakhir</h2>
-            <p style={{ fontSize: 18, margin: '0 0 10px' }}>
-              🏆 Juara 1:{' '}
-              {gameResult.champions.length > 0 ? namesFor(gameResult.champions) : 'tidak ada, semua pemain kalah'}
-            </p>
-            <p style={{ fontSize: 15, opacity: 0.8, margin: '0 0 28px' }}>Kalah: {namesFor(gameResult.losers)}</p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button style={button} onClick={onPlayAgain}>
-                Main lagi
-              </button>
-              <button style={{ ...button, background: '#3a3a3a', color: '#fff' }} onClick={onBackToMenu}>
-                Kembali ke menu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {gameResult && state && <HasilAkhir result={gameResult} totals={state.totals} seats={SEAT_INFO}
+        onPlayAgain={onPlayAgain} onBackToMenu={onBackToMenu} />}
       {w < h && (
         <div style={{ ...overlay, zIndex: 3, background: '#123e2b', textAlign: 'center', padding: 24, boxSizing: 'border-box' }}>
           <div>
@@ -256,7 +234,7 @@ export function App() {
   const [muted, setMuted] = useState(audio.muted);
   useEffect(() => {
     const unlock = () => audio.unlock();
-    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('pointerdown', unlock);
     return () => { window.removeEventListener('pointerdown', unlock); audio.dispose(); };
   }, [audio]);
   const toggleMute = () => {

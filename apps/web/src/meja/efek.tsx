@@ -1,6 +1,7 @@
 import { useTick } from '@pixi/react';
 import { Graphics, Text } from 'pixi.js';
 import { useRef } from 'react';
+import type { Seat } from '@gaple/aturan';
 import { DURASI } from '../durasi';
 import type { Presentation } from '../presentasi';
 import type { Rect } from './tataLetak';
@@ -43,19 +44,19 @@ export function PassBubble({ rect, name, at }: { rect: Rect; name: string; at: n
   );
 }
 
-export function BigEffect({ event, w, h }: { event: Presentation; w: number; h: number }) {
+type BigEvent = Extract<Presentation, { kind: 'balak' | 'gaplek' | 'win' }>;
+
+export function BigEffect({ event, seatNames, w, h }: { event: BigEvent; seatNames: readonly string[]; w: number; h: number }) {
   const graphic = useRef<Graphics>(null);
   const label = useRef<Text>(null);
   const started = useRef(event.at);
   const kind = event.kind;
   const duration = kind === 'balak' ? DURASI.balak
-    : kind === 'gaplek' ? DURASI.gaplek
-      : kind === 'champion' ? DURASI.juara : DURASI.menangSesi;
+    : kind === 'gaplek' ? DURASI.gaplek : DURASI.menangSesi;
   const words = kind === 'balak' ? 'BALAK ' + event.pip + '!'
     : kind === 'gaplek' ? 'GAPLEK ' + event.pip + '!'
-      : kind === 'win' ? 'MENANG SESI!'
-        : 'JUARA 1!';
-  const gold = kind === 'balak' || kind === 'champion';
+      : `${seatNames[event.seat]} Menang!`;
+  const gold = kind === 'balak';
   useTick(() => {
     const g = graphic.current;
     const text = label.current;
@@ -97,6 +98,32 @@ export function BigEffect({ event, w, h }: { event: Presentation; w: number; h: 
       <pixiText ref={label} text={words} x={w / 2} y={h / 2} alpha={0} anchor={0.5} resolution={2}
         style={{ fill: kind === 'gaplek' ? 0xff5353 : gold ? 0xffd54a : 0xffffff,
           fontSize: Math.min(52, w * 0.07), fontWeight: '900', fontFamily: 'system-ui' }} />
+    </pixiContainer>
+  );
+}
+
+/** Penanda juara ditempel di dekat kursi juara, tanpa menutupi seluruh meja. */
+export function ChampionBadge({ rect, seat, at }: { rect: Rect; seat: Seat; at: number }) {
+  const background = useRef<Graphics>(null);
+  const label = useRef<Text>(null);
+  const x = rect.x + rect.w / 2;
+  const y = seat === 2 ? rect.y + rect.h + 19 : rect.y - 19;
+  useTick(() => {
+    const t = Math.min(1, (performance.now() - at) / DURASI.juara);
+    const alpha = Math.min(1, t * 8) * Math.min(1, (1 - t) * 5);
+    const scale = 0.75 + 0.25 * ease(Math.min(1, t * 4));
+    for (const node of [background.current, label.current]) {
+      if (!node) continue;
+      node.alpha = alpha;
+      node.scale.set(scale);
+    }
+  });
+  return (
+    <pixiContainer>
+      <pixiGraphics ref={background} x={x} y={y} alpha={0}
+        draw={(g) => { g.clear(); g.roundRect(-48, -16, 96, 32, 16).fill(0x493713).stroke({ color: 0xffd54a, width: 2 }); }} />
+      <pixiText ref={label} text="JUARA 1" x={x} y={y} alpha={0} anchor={0.5} resolution={2}
+        style={{ fill: 0xffe28a, fontSize: 16, fontWeight: '900', fontFamily: 'system-ui' }} />
     </pixiContainer>
   );
 }
