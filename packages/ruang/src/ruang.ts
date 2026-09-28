@@ -240,7 +240,7 @@ export function jalankanTenggat(state: StateRuang, sekarang: number, benih: Beni
       }
       case 'pindahHost': {
         const lama = current.host ? current.orang[current.host]?.kursi ?? null : null;
-        current = { ...current, host: penggantiHost(current, lama ?? 3), pindahHostPada: null };
+        current = { ...current, host: penggantiHost(current, lama ?? DARI_AWAL), pindahHostPada: null };
         break;
       }
       case 'hapusRuang':
@@ -409,7 +409,7 @@ function keluar(state: StateRuang, token: string): Hasil {
   const { [token]: _, ...sisaOrang } = state.orang;
   const next: StateRuang = { ...state, orang: sisaOrang, kursi: state.kursi.map((t) => (t === token ? null : t)) };
   if (state.host !== token) return selesai(next);
-  return selesai({ ...next, host: penggantiHost(next, orang.kursi ?? 3), pindahHostPada: null });
+  return selesai({ ...next, host: penggantiHost(next, orang.kursi ?? DARI_AWAL), pindahHostPada: null });
 }
 
 /** Pemain yang bisa memegang host: manusia tersambung yang duduk dan kursinya tidak dimainkan bot. */
@@ -418,6 +418,9 @@ function bisaHost(state: StateRuang, token: string): boolean {
   if (!orang?.tersambung || orang.kursi === null) return false;
   return !(state.fase === 'bermain' && state.diambilAlih.includes(orang.kursi));
 }
+
+/** Kursi terakhir: mencari pengganti "sesudah" kursi ini berarti mulai dari kursi pertama. */
+const DARI_AWAL: Seat = 3;
 
 /** Pemain yang bisa memegang host berikutnya searah jarum jam dari `dari`, atau `null`. */
 function penggantiHost(state: StateRuang, dari: Seat): string | null {
@@ -442,7 +445,7 @@ function rapikan(state: StateRuang, sekarang: number): StateRuang {
   // Saat game berjalan host yang Terputus tetap host; hanya host yang diambil alih bot yang digantikan.
   const kursiHost = host ? state.orang[host]!.kursi : null;
   if (berjalan && kursiHost !== null && state.diambilAlih.includes(kursiHost)) host = penggantiHost(state, kursiHost);
-  host ??= penggantiHost(state, 3);
+  host ??= penggantiHost(state, DARI_AWAL);
   const hostPutus = !berjalan && host !== null && !state.orang[host]!.tersambung;
   const pindahHostPada = hostPutus ? state.pindahHostPada ?? sekarang + BATAS_WAKTU.pindahHost : null;
   const adaTersambung = Object.values(state.orang).some((o) => o.tersambung);

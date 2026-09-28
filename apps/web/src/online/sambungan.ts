@@ -214,6 +214,10 @@ export class SambunganRuang {
   /** Keluar ruang: di luar game melepas kursi dan nama; saat game berjalan sama dengan Terputus. */
   keluar() {
     if (this.status === 'tersambung') this.room.send('keluar');
+    else if (this.status === 'menyambung') {
+      // Koneksi sedang putus: sambung sebentar hanya untuk melepas kursi.
+      void gabung(this.kode, '').then((room) => { room.send('keluar'); void room.leave(); }, () => {});
+    }
     this.tutup();
   }
 

@@ -26,6 +26,11 @@ const tombolKedua: React.CSSProperties = { ...button, background: 'rgba(255,255,
 const tombolKecil: React.CSSProperties = { ...tombolKedua, font: '600 13px system-ui', padding: '6px 12px' };
 const masukan: React.CSSProperties = { font: '16px system-ui', padding: '10px 12px', borderRadius: 10, border: '1px solid #fff5', minWidth: 0 };
 const galatGaya: React.CSSProperties = { margin: 0, color: '#ffb3a9' };
+/** Pil status kecil yang melayang di tengah layar (menyambung ulang, bot memainkan kursi). */
+const pilMelayang: React.CSSProperties = {
+  position: 'fixed', left: '50%', transform: 'translateX(-50%)', borderRadius: 999,
+  background: 'rgba(0,0,0,.72)', color: '#fff', font: '600 14px system-ui', whiteSpace: 'nowrap',
+};
 const overlayPenuh: React.CSSProperties = {
   position: 'fixed', inset: 0, zIndex: 5, display: 'grid', placeItems: 'center', padding: 16,
   background: 'rgba(0,0,0,.6)', color: '#fff', fontFamily: 'system-ui',
@@ -172,16 +177,13 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
   const seats: SeatInfo[] = lobi.kursi.map((k) => ({
     name: k.nama,
     bot: k.jenis === 'bot' || k.diambilAlih,
-    disconnected: k.jenis === 'manusia' && k.terputus,
+    terputus: k.terputus,
   }));
   return (
     <>
     {penanda}
     {diambilAlih && status === 'tersambung' && (
-      <div role="status" data-testid="diambil-alih" style={{
-        position: 'fixed', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 10px 8px 16px', borderRadius: 999, background: 'rgba(0,0,0,.72)', color: '#fff', font: '600 14px system-ui', whiteSpace: 'nowrap',
-      }}>
+      <div role="status" data-testid="diambil-alih" style={{ ...pilMelayang, bottom: 16, zIndex: 3, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 16px' }}>
         Bot memainkan kursimu
         <button style={{ ...button, padding: '6px 14px', fontSize: 14 }} onClick={() => sambungan.ambilKendali()}>Ambil kendali</button>
       </div>
@@ -208,10 +210,7 @@ function PenandaSambungan({ status, sambungan, onKeluar }: { status: StatusSambu
   if (status === 'tersambung') return null;
   if (status === 'menyambung') {
     return (
-      <div role="status" data-testid="menyambung-ulang" style={{
-        position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 4, padding: '8px 16px', borderRadius: 999,
-        background: 'rgba(0,0,0,.72)', color: '#fff', font: '600 14px system-ui', whiteSpace: 'nowrap',
-      }}>
+      <div role="status" data-testid="menyambung-ulang" style={{ ...pilMelayang, top: 12, zIndex: 4, padding: '8px 16px' }}>
         Menyambung ulang…
       </div>
     );
@@ -259,7 +258,7 @@ function Lobi({ sambungan, lobi, kursiSaya, onKeluar }: {
                 <span style={{ flex: 1, minWidth: 80 }}>
                   {k.jenis === 'manusia' ? <strong>{k.nama}</strong> : <em style={{ opacity: 0.6 }}>{k.jenis === 'bot' ? `${k.nama} (bot)` : 'Kosong'}</em>}
                   {saya && ' (kamu)'}
-                  {k.jenis === 'manusia' && k.terputus && <span data-testid="terputus" style={{ color: '#ffb3a9', fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Terputus</span>}
+                  {k.terputus && <span data-testid="terputus" style={{ color: '#ffb3a9', fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Terputus</span>}
                   {lobi?.hostKursi === i && <span style={{ color: '#ffe08a', fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Host</span>}
                 </span>
                 {kosong(i) && !saya && (

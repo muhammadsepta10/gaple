@@ -30,3 +30,8 @@ Restart atau deploy server tidak merusak game, dan klien dengan versi lama mempe
 ## Blocked by
 
 - `03-terputus-bot-pengganti-host.md`
+
+## Comments
+
+- (dari tiket 03) Tenggat hapus ruang 10 menit (`hapusPada`, `Hasil.hapus` → `disconnect()`) sudah ada di paket ruang dan adaptor, karena room tidak lagi `autoDispose`. Tiket ini tinggal menambah penanda "bekas" saat ruang dihapus dan menggeser `hapusPada` di `pulihkan`.
+- (dari tiket 03) `SambunganRuang.sambungUlang` di `apps/web/src/online/sambungan.ts` berhenti dengan status `hilang` untuk setiap penolakan ruang, termasuk `perlu-pembaruan` dan "not found". Setelah Redis, cabang ini perlu memicu pembaruan service worker untuk `perlu-pembaruan`, dan terus mencoba selama server sedang restart.
