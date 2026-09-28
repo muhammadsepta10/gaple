@@ -17,15 +17,15 @@ const c = (a: number, b: number): Card => ({ id: `${Math.min(a, b)}-${Math.max(a
 
 const balakCount = (hand: readonly Card[]) => hand.filter(isBalak).length;
 
-/** Menerima hasil `applyMove` yang berhasil dan berakhir dengan sesi selesai. */
+/** Menerima hasil `applyMove` yang berhasil dan berakhir dengan ronde selesai. */
 function endedEvent(r: MoveResult) {
   if (!r.ok) throw new Error(r.reason);
   const last = r.events.at(-1)!;
-  if (last.type !== 'sessionEnded') throw new Error('sesi belum berakhir');
+  if (last.type !== 'sessionEnded') throw new Error('ronde belum berakhir');
   return last;
 }
 
-/** State minimal untuk menguji akhir sesi dan poin secara langsung, tanpa melalui pembagian acak. */
+/** State minimal untuk menguji akhir ronde dan poin secara langsung, tanpa melalui pembagian acak. */
 function fixture(overrides: {
   hands: readonly (readonly Card[])[];
   doubleBalak?: boolean;
@@ -62,7 +62,7 @@ describe('pembagian ulang (≥5 balak)', () => {
     expect(new Set(ids).size).toBe(28);
   });
 
-  it('berlaku juga saat membagikan sesi lanjutan lewat nextSession', () => {
+  it('berlaku juga saat membagikan ronde lanjutan lewat nextSession', () => {
     const base = fixture({ hands: [[c(1, 2)], [c(3, 4)], [c(2, 5)], [c(0, 1)]] });
     const withResult: GameState = { ...base, session: { ...base.session, result: { kind: 'emptyHand', winner: 0 } } };
     // seed 10: pembagian pertama memberi kursi 0 lima balak; pembagian kedua sah (lihat tes di atas).
@@ -77,7 +77,7 @@ describe('pembagian ulang (≥5 balak)', () => {
 });
 
 describe('kartu habis sekaligus buntu', () => {
-  it('menghasilkan menang sesi, bukan gaplek', () => {
+  it('menghasilkan menang ronde, bukan gaplek', () => {
     const session: SessionState = {
       number: 1,
       hands: [
@@ -123,7 +123,7 @@ describe('gaplek', () => {
   });
 });
 
-describe('poin sesi', () => {
+describe('poin ronde', () => {
   it('balak 6 = 12 tanpa balak ganda, 24 dengan balak ganda; 4-4 ganda = 16', () => {
     const hands = [[c(0, 0)], [c(6, 6)], [c(4, 4)], [c(0, 1)]];
     const off = fixture({ hands });
@@ -148,11 +148,11 @@ describe('poin sesi', () => {
     expect(ended.sessionPoints[2]).toBe(33);
   });
 
-  it('balak 0 mati juga berlaku saat sesi berakhir karena gaplek, bukan hanya kartu habis', () => {
+  it('balak 0 mati juga berlaku saat ronde berakhir karena gaplek, bukan hanya kartu habis', () => {
     const session: SessionState = {
       number: 1,
       hands: [
-        [c(6, 2), c(1, 3)], // giliran; setelah main 6-2, masih pegang 1-3 (bukan menang sesi)
+        [c(6, 2), c(1, 3)], // giliran; setelah main 6-2, masih pegang 1-3 (bukan menang ronde)
         [c(4, 5)],
         [c(0, 0), c(3, 5)],
         [c(1, 4)],
@@ -168,13 +168,13 @@ describe('poin sesi', () => {
     expect(ended.sessionPoints[2]).toBe(33);
   });
 
-  it('pemenang sesi mendapat nol poin', () => {
+  it('pemenang ronde mendapat nol poin', () => {
     const state = fixture({ hands: [[c(1, 2)], [c(6, 6)], [c(2, 3)], [c(0, 1)]] });
     const ended = endedEvent(applyMove(state, { seat: 0, cardId: '1-2', end: 'left' }));
     expect(ended.sessionPoints[0]).toBe(0);
   });
 
-  it('poin sesi ditambahkan ke total yang sudah ada', () => {
+  it('poin ronde ditambahkan ke total yang sudah ada', () => {
     const state = fixture({ hands: [[c(1, 2)], [c(6, 6)], [c(2, 3)], [c(0, 1)]], totals: [10, 20, 30, 40] });
     const r = applyMove(state, { seat: 0, cardId: '1-2', end: 'left' });
     const ended = endedEvent(r);
@@ -183,8 +183,8 @@ describe('poin sesi', () => {
   });
 });
 
-describe('pembuka sesi lanjutan', () => {
-  it('pemenang sesi bebas memilih kartu apa pun untuk membuka sesi berikutnya', () => {
+describe('pembuka ronde lanjutan', () => {
+  it('pemenang ronde bebas memilih kartu apa pun untuk membuka ronde berikutnya', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const winner = (seed % 4) as Seat;
       const base = fixture({ hands: [[c(1, 2)], [c(3, 4)], [c(2, 5)], [c(0, 1)]] });
@@ -211,7 +211,7 @@ describe('pembuka sesi lanjutan', () => {
     }
   });
 
-  it('menolak lanjut ke sesi berikutnya jika sesi berjalan belum berakhir', () => {
+  it('menolak lanjut ke ronde berikutnya jika ronde berjalan belum berakhir', () => {
     const { state } = startGame({}, seededRandom(1));
     expect(() => nextSession(state, seededRandom(1))).toThrow();
   });

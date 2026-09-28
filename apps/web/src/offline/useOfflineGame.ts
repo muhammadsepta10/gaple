@@ -125,7 +125,7 @@ export function useOfflineGame(audio: Suara) {
         if (event.cause.kind === 'emptyHand') {
           present({ kind: 'win', seat: event.cause.winner });
           audio.winSession();
-          if (!await wait(DURASI.menangSesi, signal)) return;
+          if (!await wait(DURASI.menangRonde, signal)) return;
         } else {
           present({ kind: 'gaplek', pip: event.cause.pip });
           audio.gaplek();
@@ -134,7 +134,7 @@ export function useOfflineGame(audio: Suara) {
         if (!result.state.result) {
           setPresentation(null);
           setSummary({ cause: event.cause, hands: event.hands, sessionPoints: event.sessionPoints, totals: event.totals });
-          if (!await wait(DURASI.ringkasanSesi, signal)) return;
+          if (!await wait(DURASI.ringkasanRonde, signal)) return;
           const next = nextSession(result.state, seededRandom(randomSeed()));
           setSummary(null);
           await runDeal(next.state, next.events);

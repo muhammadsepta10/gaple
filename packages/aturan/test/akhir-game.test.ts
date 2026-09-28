@@ -5,8 +5,8 @@ const c = (a: number, b: number): Card => ({ id: `${Math.min(a, b)}-${Math.max(a
 
 /**
  * State minimal untuk menguji akhir game: kursi 0 menghabiskan kartu terakhirnya (`1-2` di ujung kiri
- * bernilai 1), sehingga sesi berakhir dengan kursi 0 sebagai pemenang. Kursi lain dibuat kosong agar
- * poin sesi mereka nol, sehingga totalnya sama persis dengan `totals` yang diberikan.
+ * bernilai 1), sehingga ronde berakhir dengan kursi 0 sebagai pemenang. Kursi lain dibuat kosong agar
+ * poin ronde mereka nol, sehingga totalnya sama persis dengan `totals` yang diberikan.
  */
 function fixture(overrides: { totals: readonly number[]; targetPoints?: number }): GameState {
   const session: SessionState = {
@@ -26,7 +26,7 @@ describe('akhir game', () => {
   it('berakhir saat total melewati target, tidak harus tepat (92 + 14 = 106)', () => {
     const r = endGame([0, 92, 0, 0]);
     if (!r.ok) throw new Error(r.reason);
-    // sesi ini tidak menambah poin (lihat fixture), jadi tambahan 14 harus datang dari total awal itu sendiri
+    // ronde ini tidak menambah poin (lihat fixture), jadi tambahan 14 harus datang dari total awal itu sendiri
     const withGain = endGame([0, 92 + 14, 0, 0]);
     if (!withGain.ok) throw new Error(withGain.reason);
     const ended = withGain.events.find((e) => e.type === 'gameEnded');
@@ -46,7 +46,7 @@ describe('akhir game', () => {
     expect(ended).toEqual({ type: 'gameEnded', result: { champions: [0, 1], losers: [2, 3] } });
   });
 
-  it('tidak ada juara 1 jika keempat pemain kalah di sesi yang sama', () => {
+  it('tidak ada juara 1 jika keempat pemain kalah di ronde yang sama', () => {
     const r = endGame([100, 100, 100, 100]);
     if (!r.ok) throw new Error(r.reason);
     expect(r.state.result).toEqual({ champions: [], losers: [0, 1, 2, 3] });
@@ -57,11 +57,11 @@ describe('akhir game', () => {
     if (!r.ok) throw new Error(r.reason);
     expect(r.state.result).toBeNull();
     expect(r.events.some((e) => e.type === 'gameEnded')).toBe(false);
-    // sesi berikutnya tetap bisa dimulai selama game belum berakhir
+    // ronde berikutnya tetap bisa dimulai selama game belum berakhir
     expect(() => nextSession(r.state, seededRandom(1))).not.toThrow();
   });
 
-  it('menolak lanjut ke sesi berikutnya setelah game berakhir', () => {
+  it('menolak lanjut ke ronde berikutnya setelah game berakhir', () => {
     const r = endGame([100, 0, 0, 0]);
     if (!r.ok) throw new Error(r.reason);
     expect(r.state.result).not.toBeNull();

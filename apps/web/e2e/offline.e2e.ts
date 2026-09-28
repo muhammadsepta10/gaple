@@ -14,7 +14,7 @@ test('gambar bawaan dan shell bisa dibuka setelah kunjungan pertama tanpa jaring
   await page.waitForFunction(() => document.querySelector('[data-testid="legal-move"]'));
 });
 
-test('satu sesi selesai, gambar meja bertahan, game tetap bisa dimainkan offline', async ({ page, context }) => {
+test('satu ronde selesai, gambar meja bertahan, game tetap bisa dimainkan offline', async ({ page, context }) => {
   const requestedTables: string[] = [];
   context.on('request', (request) => {
     if (request.url().includes('/meja/')) requestedTables.push(request.url());

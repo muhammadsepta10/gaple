@@ -29,7 +29,7 @@ describe('determinisme', () => {
     expect(JSON.parse(JSON.stringify(a.state))).toEqual(a.state);
   });
 
-  it('seed sama menghasilkan urutan event yang sama sampai sesi berakhir', () => {
+  it('seed sama menghasilkan urutan event yang sama sampai ronde berakhir', () => {
     const play = () => {
       const start = startGame({}, seededRandom(99));
       const rest = playOut(start.state);
@@ -47,7 +47,7 @@ describe('determinisme', () => {
   });
 });
 
-describe('pembuka sesi pertama', () => {
+describe('pembuka ronde pertama', () => {
   it('pemegang 0–0 mendapat giliran pertama dan hanya boleh membuka dengan 0–0', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const { state } = startGame({}, seededRandom(seed));
@@ -148,7 +148,7 @@ describe('aksi ilegal', () => {
     expectRejected(state, { seat, cardId: misfit.id, end: 'right' }, 'card-does-not-fit');
   });
 
-  it('menolak pembuka sesi pertama selain 0–0', () => {
+  it('menolak pembuka ronde pertama selain 0–0', () => {
     const { state } = startGame({}, seededRandom(7));
     const seat = state.session.turn;
     const cardId = state.session.hands[seat]!.find((c) => c.id !== '0-0')!.id;
@@ -156,7 +156,7 @@ describe('aksi ilegal', () => {
   });
 });
 
-/** Memainkan sesi dengan langkah legal pertama sampai tidak ada kursi yang harus memilih. */
+/** Memainkan ronde dengan langkah legal pertama sampai tidak ada kursi yang harus memilih. */
 function playOut(state: GameState) {
   const events = [];
   let st = state;
@@ -168,10 +168,10 @@ function playOut(state: GameState) {
     st = r.state;
     events.push(...r.events);
   }
-  throw new Error('sesi tidak berakhir');
+  throw new Error('ronde tidak berakhir');
 }
 
-describe('akhir sesi', () => {
+describe('akhir ronde', () => {
   it('berakhir saat seorang pemain menghabiskan kartunya, dan event menyebut pemenangnya', () => {
     let found = 0;
     for (let seed = 1; seed <= 30; seed++) {
@@ -190,7 +190,7 @@ describe('akhir sesi', () => {
     expect(found).toBeGreaterThan(0);
   });
 
-  it('menolak aksi setelah sesi berakhir', () => {
+  it('menolak aksi setelah ronde berakhir', () => {
     const { state } = startGame({}, seededRandom(3));
     const end = playOut(state).state;
     expect(legalMoves(end)).toEqual([]);

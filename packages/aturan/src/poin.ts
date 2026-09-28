@@ -1,7 +1,7 @@
 import { isBalak, type Card } from './kartu';
 import type { Seat } from './kursi';
 
-/** Nilai poin satu kartu yang masih dipegang saat sesi berakhir. */
+/** Nilai poin satu kartu yang masih dipegang saat ronde berakhir. */
 export function cardValue(c: Card, zeroDead: boolean, doubleBalak: boolean): number {
   if (isBalak(c)) {
     if (c.a === 0) return zeroDead ? 25 : 0;
@@ -16,7 +16,7 @@ function isZeroDead(hands: readonly (readonly Card[])[]): boolean {
 }
 
 /**
- * Poin sesi per kursi dari sisa kartu yang dipegang. Pemenang sesi (kartu habis) mendapat nol.
+ * Poin ronde per kursi dari sisa kartu yang dipegang. Pemenang ronde (kartu habis) mendapat nol.
  * Balak 1-6 dihitung dua kali jika `doubleBalak`; balak 0 tidak terpengaruh opsi ini.
  */
 export function sessionPoints(

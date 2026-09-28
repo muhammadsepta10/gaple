@@ -6,7 +6,7 @@ import { cardValue } from './poin';
 /** Bonus kecil untuk balak: hanya memenangkan nilai yang sama, tidak mengalahkan kartu bernilai lebih besar. */
 const BALAK_BONUS = 0.5;
 
-/** Nilai kartu jika tertahan di tangan saat sesi berakhir, ditambah bonus balak. */
+/** Nilai kartu jika tertahan di tangan saat ronde berakhir, ditambah bonus balak. */
 function discardValue(c: Card, doubleBalak: boolean): number {
   return cardValue(c, false, doubleBalak) + (isBalak(c) ? BALAK_BONUS : 0);
 }

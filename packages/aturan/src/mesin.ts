@@ -12,7 +12,7 @@ export type End = 'left' | 'right';
 /** Aksi pemain: pasang kartu di ujung susunan. Saat rantai kosong, ujung selalu 'left'. */
 export type Move = { readonly seat: Seat; readonly cardId: string; readonly end: End };
 
-/** Aturan pembuka sesi: wajib balak tertentu, atau bebas (pemenang sesi sebelumnya). */
+/** Aturan pembuka ronde: wajib balak tertentu, atau bebas (pemenang ronde sebelumnya). */
 export type Opening = { readonly kind: 'balak'; readonly pip: number } | { readonly kind: 'free' };
 
 /** Satu kartu di rantai, dalam urutan pemasangan. `open` = nilai ujung terbuka yang dihasilkan kartu ini. */
@@ -25,17 +25,17 @@ export type Chain = {
 };
 
 export type SessionState = {
-  /** Nomor sesi dalam game, mulai dari 1. */
+  /** Nomor ronde dalam game, mulai dari 1. */
   readonly number: number;
   readonly hands: readonly (readonly Card[])[];
   readonly chain: Chain;
   readonly opening: Opening;
   readonly turn: Seat;
-  /** Hasil sesi; `null` selama sesi berjalan. */
+  /** Hasil ronde; `null` selama ronde berjalan. */
   readonly result: SessionEndCause | null;
 };
 
-/** Sebab sesi berakhir. Kartu habis diperiksa sebelum gaplek. */
+/** Sebab ronde berakhir. Kartu habis diperiksa sebelum gaplek. */
 export type SessionEndCause = { readonly kind: 'emptyHand'; readonly winner: Seat } | { readonly kind: 'gaplek'; readonly pip: number };
 
 /** Hasil game: kursi juara 1 (bisa bersama, atau kosong jika semua kalah) dan kursi yang kalah. */
@@ -63,11 +63,11 @@ export type GameEvent =
   | {
       readonly type: 'sessionEnded';
       readonly cause: SessionEndCause;
-      /** Sisa kartu setiap kursi saat sesi berakhir. */
+      /** Sisa kartu setiap kursi saat ronde berakhir. */
       readonly hands: readonly (readonly Card[])[];
-      /** Poin sesi per kursi (balak ganda dan balak 0 mati sudah diperhitungkan). */
+      /** Poin ronde per kursi (balak ganda dan balak 0 mati sudah diperhitungkan). */
       readonly sessionPoints: readonly number[];
-      /** Total poin per kursi setelah poin sesi ini ditambahkan. */
+      /** Total poin per kursi setelah poin ronde ini ditambahkan. */
       readonly totals: readonly number[];
     }
   | { readonly type: 'gameEnded'; readonly result: GameResult };
@@ -92,7 +92,7 @@ function gameResultFor(totals: readonly number[], targetPoints: number): GameRes
   return { champions: contenders.filter((s) => totals[s] === lowest), losers };
 }
 
-/** Membagikan 28 kartu untuk satu sesi, mengulang jika ada kursi dengan ≥5 balak. */
+/** Membagikan 28 kartu untuk satu ronde, mengulang jika ada kursi dengan ≥5 balak. */
 function dealSession(sessionNumber: number, random: Random): { hands: Card[][]; events: GameEvent[] } {
   const events: GameEvent[] = [];
   let hands: Card[][];
@@ -116,13 +116,13 @@ export function startGame(config: Partial<GameConfig>, random: Random): Transiti
 }
 
 /**
- * Memulai sesi berikutnya dalam game yang sama, setelah sesi sebelumnya berakhir.
- * Pembuka: bebas memilih kartu untuk pemenang sesi, atau wajib balak n untuk pemegangnya setelah gaplek n.
+ * Memulai ronde berikutnya dalam game yang sama, setelah ronde sebelumnya berakhir.
+ * Pembuka: bebas memilih kartu untuk pemenang ronde, atau wajib balak n untuk pemegangnya setelah gaplek n.
  */
 export function nextSession(state: GameState, random: Random): Transition {
   if (state.result) throw new Error('game sudah berakhir');
   const cause = state.session.result;
-  if (!cause) throw new Error('sesi belum berakhir');
+  if (!cause) throw new Error('ronde belum berakhir');
   const number = state.session.number + 1;
   const { hands, events } = dealSession(number, random);
   const opening: Opening = cause.kind === 'emptyHand' ? { kind: 'free' } : { kind: 'balak', pip: cause.pip };

@@ -8,7 +8,7 @@ export const DURASI = {
   bagiTotal: 28 * JEDA_BAGI + KARTU_TERBANG,
   pass: 1260,
   balak: 1820,
-  menangSesi: 2520,
+  menangRonde: 2520,
   gaplek: 2380,
   juara: 2770,
   getarBalak: 308,
@@ -24,8 +24,8 @@ export const DURASI = {
   /** Periode denyut penanda giliran dan target ujung (ms per radian). */
   denyutGiliran: 180,
   denyutUjung: 150,
-  /** Ringkasan sesi tampil, lalu sesi berikutnya dimulai otomatis. */
-  ringkasanSesi: 5000,
+  /** Ringkasan ronde tampil, lalu ronde berikutnya dimulai otomatis. */
+  ringkasanRonde: 5000,
   /** Pemberitahuan pembagian ulang (≥5 balak). */
   notifikasiBagiUlang: 2200,
 } as const;

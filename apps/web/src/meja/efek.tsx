@@ -52,7 +52,7 @@ export function BigEffect({ event, seatNames, w, h }: { event: BigEvent; seatNam
   const started = useRef(event.at);
   const kind = event.kind;
   const duration = kind === 'balak' ? DURASI.balak
-    : kind === 'gaplek' ? DURASI.gaplek : DURASI.menangSesi;
+    : kind === 'gaplek' ? DURASI.gaplek : DURASI.menangRonde;
   const words = kind === 'balak' ? 'BALAK ' + event.pip + '!'
     : kind === 'gaplek' ? 'GAPLEK ' + event.pip + '!'
       : `${seatNames[event.seat]} Menang!`;
