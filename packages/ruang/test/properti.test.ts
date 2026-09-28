@@ -1,7 +1,7 @@
 import { legalMoves, type Seat } from '@gaple/aturan';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { DURASI, VERSI_PROTOKOL, buatRuang, jalankanTenggat, terapkan, type Hasil, type PesanKeluar, type StateRuang } from '../src';
+import { BATAS_WAKTU, DURASI, VERSI_PROTOKOL, buatRuang, jalankanTenggat, terapkan, type Hasil, type Perintah, type PesanKeluar, type StateRuang } from '../src';
 
 type Aksi = { readonly tunda: number; readonly pilihan: number; readonly acak: boolean };
 
@@ -131,6 +131,112 @@ describe('ruang: properti', () => {
         expect(akhir.tenggat).toBeNull();
       }),
       { numRuns: 40 },
+    );
+  });
+});
+
+const TOKEN_LOBI = ['tok-a', 'tok-b', 'tok-c', 'tok-d', 'tok-e', 'tok-f'];
+
+const kejadianArb = fc.record({
+  jenis: fc.constantFrom('masuk', 'terputus', 'keluar', 'pilihKursi', 'pindahkan', 'kosongkan', 'ambilKendali', 'main', 'tunggu'),
+  orang: fc.nat({ max: TOKEN_LOBI.length - 1 }),
+  kursi: fc.constantFrom<Seat>(0, 1, 2, 3),
+  jeda: fc.integer({ min: 0, max: 400_000 }),
+});
+
+type Kejadian = { jenis: string; orang: number; kursi: Seat; jeda: number };
+
+/** Perintah acak dari satu orang (atau host, untuk perintah host) pada waktu `sekarang`. */
+function perintahAcak(state: StateRuang, k: Kejadian): Perintah | null {
+  const token = TOKEN_LOBI[k.orang]!;
+  const host = state.host ?? token;
+  switch (k.jenis) {
+    case 'masuk': return { jenis: 'masuk', token, nama: `N${k.orang}`, versi: VERSI_PROTOKOL };
+    case 'terputus': return { jenis: 'terputus', token };
+    case 'keluar': return { jenis: 'keluar', token };
+    case 'pilihKursi': return { jenis: 'pilihKursi', token, kursi: k.kursi };
+    case 'pindahkan': return { jenis: 'pindahkan', token: host, dari: k.kursi, ke: ((k.kursi + k.orang + 1) % 4) as Seat };
+    case 'kosongkan': return { jenis: 'kosongkan', token: host, kursi: k.kursi };
+    case 'ambilKendali': return { jenis: 'ambilKendali', token };
+    case 'main': {
+      const game = state.game;
+      if (state.fase !== 'bermain' || !game || game.session.result) return null;
+      const seat = game.session.turn;
+      const pemilik = state.kursi[seat];
+      if (!pemilik) return null;
+      const m = legalMoves(game)[k.orang % legalMoves(game).length]!;
+      return { jenis: 'pasang', token: pemilik, cardId: m.cardId, end: m.end };
+    }
+    default: return null;
+  }
+}
+
+describe('ruang: properti terputus dan host', () => {
+  it('token yang sama selalu kembali ke kursi, kartu, dan total poin yang sama', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 2, max: 4 }), fc.integer({ min: 1, max: 1e6 }), fc.array(kejadianArb, { minLength: 1, maxLength: 120 }), (jumlah, seed, kejadian) => {
+        let n = seed;
+        const benih = () => n++;
+        let state = buatRuang('KODE22');
+        for (const token of TOKEN.slice(0, jumlah)) state = terapkan(state, { jenis: 'masuk', token, nama: token, versi: VERSI_PROTOKOL }, 0, benih).state;
+        state = terapkan(state, { jenis: 'mulai', token: 'tok-a' }, 0, benih).state;
+        const kursiAwal = Object.fromEntries(Object.entries(state.orang).map(([t, o]) => [t, o.kursi]));
+        let sekarang = 0;
+        for (const k of kejadian) {
+          if (state.fase !== 'bermain') break;
+          sekarang += k.jeda % 20_000;
+          state = jalankanTenggat(state, sekarang, benih).state;
+          // Hanya pemain yang sudah duduk; token baru saat game berjalan tidak relevan di sini.
+          const token = TOKEN[k.orang % jumlah]!;
+          const perintah = k.jenis === 'masuk' ? { jenis: 'masuk' as const, token, nama: '', versi: VERSI_PROTOKOL } : perintahAcak(state, { ...k, orang: k.orang % jumlah });
+          if (!perintah) continue;
+          const sebelum = state;
+          const hasil = terapkan(state, perintah, Math.max(sekarang, perintah.jenis === 'pasang' ? state.jendelaSelesai : 0), benih);
+          state = hasil.state;
+          if (perintah.jenis === 'masuk' && state.fase === 'bermain') {
+            const seat = kursiAwal[token]!;
+            const [snapshot] = hasil.pesan.filter((p) => p.untuk === token).map((p) => p.pesan);
+            expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: seat });
+            if (snapshot?.jenis !== 'snapshot') throw new Error();
+            expect(snapshot.pandangan!.hand).toEqual(sebelum.game!.session.hands[seat!]);
+            expect(snapshot.pandangan!.totals).toEqual(sebelum.game!.totals);
+          }
+          for (const [t, o] of Object.entries(state.orang)) expect(o.kursi).toBe(kursiAwal[t]);
+        }
+      }),
+      { numRuns: 80 },
+    );
+  });
+
+  it('di luar game, selama ada pemain tersambung, ruang tidak pernah lebih dari 2 menit tanpa host tersambung', () => {
+    fc.assert(
+      fc.property(fc.array(kejadianArb, { minLength: 1, maxLength: 150 }), (kejadian) => {
+        const benih = () => 1;
+        let state = terapkan(buatRuang('KODE22'), { jenis: 'masuk', token: 'tok-a', nama: 'A', versi: VERSI_PROTOKOL }, 0, benih).state;
+        let sekarang = 0;
+        let tanpaHostSejak: number | null = null;
+        const periksa = () => {
+          const adaPemain = Object.values(state.orang).some((o) => o.tersambung && o.kursi !== null);
+          const hostTersambung = state.host !== null && state.orang[state.host]!.tersambung && state.orang[state.host]!.kursi !== null;
+          if (!adaPemain || hostTersambung) tanpaHostSejak = null;
+          else {
+            tanpaHostSejak ??= sekarang;
+            expect(sekarang - tanpaHostSejak).toBeLessThanOrEqual(BATAS_WAKTU.pindahHost);
+          }
+        };
+        for (const k of kejadian) {
+          sekarang += k.jeda;
+          const hasil = jalankanTenggat(state, sekarang, benih);
+          if (hasil.hapus) return;
+          state = hasil.state;
+          periksa();
+          const perintah = perintahAcak(state, k);
+          if (!perintah || perintah.jenis === 'pasang') continue;
+          state = terapkan(state, perintah, sekarang, benih).state;
+          periksa();
+        }
+      }),
+      { numRuns: 300 },
     );
   });
 });

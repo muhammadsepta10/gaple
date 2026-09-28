@@ -1,6 +1,8 @@
 import { Client, type Room } from '@colyseus/sdk';
 import type { GameConfig, Move, Seat } from '@gaple/aturan';
-import { PANJANG_NAMA_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan } from '@gaple/ruang';
+import {
+  KODE_TUTUP_DIGANTIKAN, PANJANG_NAMA_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan,
+} from '@gaple/ruang';
 
 /** Proyeksi lobi publik dari Schema. */
 export type LobiKlien = {
@@ -56,6 +58,7 @@ const PESAN_TOLAK: Partial<Record<AlasanTolak, string>> = {
   'kursi-kosong': 'Kursi itu sudah kosong.',
   'kursi-host': 'Host tidak bisa mengosongkan kursinya sendiri.',
   'konfigurasi-tidak-sah': `Target poin harus bilangan bulat 1–${TARGET_POIN_MAKS}.`,
+  'diambil-alih': 'Bot sedang memainkan kursimu. Ambil kendali dulu.',
 };
 
 export const PESAN_KODE_TIDAK_ADA = 'Kode ruang tidak ditemukan. Minta tautan atau kode baru ke host.';
@@ -83,17 +86,45 @@ export const pesanTolak = (alasan: AlasanTolak) => PESAN_TOLAK[alasan] ?? null;
 export const tautanRuang = (kode: string) => `${location.origin}${import.meta.env.BASE_URL}r/${kode}`;
 
 /**
- * Satu koneksi ke ruang. Pendengar dipasang segera setelah bergabung supaya snapshot
- * pertama tidak hilang sebelum komponen React terpasang.
+ * Keadaan koneksi ke ruang:
+ * - `tersambung`: normal;
+ * - `menyambung`: koneksi putus tanpa disengaja, sedang mencoba lagi dengan token yang sama;
+ * - `digantikan`: token yang sama membuka ruang ini di tab lain;
+ * - `hilang`: ruang sudah tidak ada atau tidak lagi mengenali token ini.
+ */
+export type StatusSambungan = 'tersambung' | 'menyambung' | 'digantikan' | 'hilang';
+
+/** Jeda sebelum percobaan sambung ulang ke-n (ms). */
+const jedaSambungUlang = (n: number) => Math.min(500 * 2 ** n, 10_000);
+
+/**
+ * Koneksi ke satu ruang yang bertahan melewati putus sambung. Identitas tetap token pemain,
+ * jadi menyambung ulang cukup bergabung lagi dengan token yang sama; ruang langsung mengirim
+ * snapshot. Pendengar dipasang segera setelah bergabung supaya snapshot pertama tidak hilang
+ * sebelum komponen React terpasang.
  */
 export class SambunganRuang {
   private antrean: Pesan[] = [];
   private pendengar: ((pesan: Pesan) => void) | null = null;
   private pendengarLobi = new Set<() => void>();
   private pendengarTolak = new Set<(alasan: AlasanTolak) => void>();
+  private pendengarStatus = new Set<() => void>();
   private lobi: LobiKlien | null = null;
+  private status: StatusSambungan = 'tersambung';
+  private selesai = false;
+  private timerUlang: ReturnType<typeof setTimeout> | undefined;
+  readonly kode: string;
 
-  constructor(private readonly room: Room) {
+  constructor(private room: Room) {
+    /** Kode undangan = roomId. */
+    this.kode = room.roomId;
+    this.ikat(room);
+  }
+
+  private ikat(room: Room) {
+    this.room = room;
+    // Sambung ulang milik SDK memakai allowReconnection, yang tidak dipakai server; ruang ini menyambung sendiri.
+    room.reconnection.enabled = false;
     room.onMessage('pesan', (pesan: Pesan) => {
       if (pesan.jenis === 'ditolak') for (const fn of this.pendengarTolak) fn(pesan.alasan);
       if (this.pendengar) this.pendengar(pesan);
@@ -103,7 +134,40 @@ export class SambunganRuang {
       this.lobi = state.toJSON();
       for (const fn of this.pendengarLobi) fn();
     });
+    room.onLeave((code: number) => {
+      if (this.selesai || room !== this.room) return;
+      if (code === KODE_TUTUP_DIGANTIKAN) this.ubahStatus('digantikan');
+      else this.sambungUlang();
+    });
   }
+
+  private ubahStatus(status: StatusSambungan) {
+    this.status = status;
+    for (const fn of this.pendengarStatus) fn();
+  }
+
+  /** Bergabung lagi dengan token yang sama, dengan jeda yang makin panjang sampai berhasil. */
+  sambungUlang = (percobaan = 0) => {
+    if (this.selesai) return;
+    clearTimeout(this.timerUlang);
+    this.ubahStatus('menyambung');
+    this.timerUlang = setTimeout(async () => {
+      try {
+        const room = await gabung(this.kode, '');
+        if (this.selesai) {
+          void room.leave();
+          return;
+        }
+        this.ikat(room);
+        this.ubahStatus('tersambung');
+      } catch (err) {
+        if (this.selesai) return;
+        // Ruang sudah dihapus atau tidak lagi mengenali token (misalnya dikeluarkan): berhenti mencoba.
+        if (alasanGagal(err) || pesanGagal(err) === PESAN_KODE_TIDAK_ADA) this.ubahStatus('hilang');
+        else this.sambungUlang(percobaan + 1);
+      }
+    }, percobaan === 0 ? 0 : jedaSambungUlang(percobaan));
+  };
 
   dengarPesan(fn: (pesan: Pesan) => void): () => void {
     this.pendengar = fn;
@@ -118,14 +182,18 @@ export class SambunganRuang {
 
   lobiSekarang = (): LobiKlien | null => this.lobi;
 
+  dengarStatus = (fn: () => void): (() => void) => {
+    this.pendengarStatus.add(fn);
+    return () => this.pendengarStatus.delete(fn);
+  };
+
+  statusSekarang = (): StatusSambungan => this.status;
+
   /** Penolakan perintah dari server (hanya untuk pengirimnya). */
   dengarTolak(fn: (alasan: AlasanTolak) => void): () => void {
     this.pendengarTolak.add(fn);
     return () => this.pendengarTolak.delete(fn);
   }
-
-  /** Kode undangan = roomId. */
-  get kode(): string { return this.room.roomId; }
 
   pilihKursi(kursi: Seat) { this.room.send('pilihKursi', { kursi }); }
 
@@ -141,8 +209,25 @@ export class SambunganRuang {
 
   pasang(move: Move) { this.room.send('pasang', { cardId: move.cardId, end: move.end }); }
 
-  keluar() { void this.room.leave(); }
+  ambilKendali() { this.room.send('ambilKendali'); }
+
+  /** Keluar ruang: di luar game melepas kursi dan nama; saat game berjalan sama dengan Terputus. */
+  keluar() {
+    if (this.status === 'tersambung') this.room.send('keluar');
+    this.tutup();
+  }
+
+  /** Menutup koneksi tanpa melepas kursi; pemain tetap bisa kembali lewat tautan. */
+  tutup() {
+    if (this.selesai) return;
+    this.selesai = true;
+    clearTimeout(this.timerUlang);
+    void this.room.leave();
+  }
 }
+
+const gabung = (kode: string, nama: string) =>
+  new Client(alamatServer()).joinById(kode, { token: tokenPemain(), nama, versi: VERSI_PROTOKOL });
 
 export async function sambungRuangBaru(nama: string): Promise<SambunganRuang> {
   const room = await new Client(alamatServer()).create('ruang', { token: tokenPemain(), nama, versi: VERSI_PROTOKOL });
@@ -155,7 +240,7 @@ export async function sambungRuangBaru(nama: string): Promise<SambunganRuang> {
  * langsung kembali ke tempatnya, jadi `nama` boleh kosong untuk percobaan pertama.
  */
 export async function sambungRuang(kode: string, nama: string): Promise<SambunganRuang> {
-  const room = await new Client(alamatServer()).joinById(kode, { token: tokenPemain(), nama, versi: VERSI_PROTOKOL });
+  const room = await gabung(kode, nama);
   if (nama.trim()) tulis(KUNCI_NAMA, nama.trim());
   return new SambunganRuang(room);
 }

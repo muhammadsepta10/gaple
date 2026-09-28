@@ -26,7 +26,7 @@ function pesanUntuk(hasil: Hasil, token: string): Pesan[] {
 /** Menerapkan perintah berurutan pada waktu 0; hasil terakhir dikembalikan. */
 function jalankan(state: StateRuang, ...perintah: Perintah[]): Hasil {
   const benih = benihTetap();
-  let hasil: Hasil = { state, pesan: [], tenggatBerikutnya: null };
+  let hasil: Hasil = { state, pesan: [], tenggatBerikutnya: null, hapus: false };
   for (const p of perintah) hasil = terapkan(hasil.state, p, 0, benih);
   return hasil;
 }
@@ -47,8 +47,8 @@ function mainkanSampaiHasil(state: StateRuang, benih = benihTetap(5)): StateRuan
   let hasil = terapkan(state, { jenis: 'mulai', token: state.host! }, 0, benih);
   for (let i = 0; i < 5000 && hasil.state.fase === 'bermain'; i++) {
     const s = hasil.state;
-    if (hasil.tenggatBerikutnya !== null) {
-      hasil = jalankanTenggat(s, hasil.tenggatBerikutnya, benih);
+    if (s.tenggat) {
+      hasil = jalankanTenggat(s, s.tenggat.pada, benih);
       continue;
     }
     const game = s.game!;

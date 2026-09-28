@@ -41,8 +41,11 @@ function hasilGame(events: readonly EventKlien[]): GameResult | null {
  * Pengendali game online: menerima snapshot dan event tersensor, mengantrekan presentasi dengan
  * durasi bersama, dan membuka input hanya pada giliran sendiri setelah jendela presentasi server selesai.
  * Server tidak pernah menunggu klien: klien yang tertinggal melompat ke keadaan terbaru.
+ * `terkunci` menutup input dari luar: koneksi sedang menyambung ulang atau kursi dimainkan bot pengganti.
  */
-export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSiap: boolean): TampilanGame & { seat: Seat; kursi: Seat | null } {
+export function useOnlineGame(
+  sambungan: SambunganRuang, audio: Suara, kanvasSiap: boolean, terkunci: boolean,
+): TampilanGame & { seat: Seat; kursi: Seat | null } {
   /** Kursi sendiri; `null` = belum duduk (dikosongkan host). */
   const [kursi, setKursi] = useState<Seat | null>(null);
   const seat = kursi ?? 0;
@@ -165,6 +168,8 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
       return;
     }
     if (pesan.jenis === 'snapshot') {
+      // Snapshot juga tiba setelah menyambung ulang: langkah yang belum dijawab dianggap hilang.
+      setMenunggu(false);
       setKursi(pesan.kursi);
       antrean.current = [];
       generasi.current++;
@@ -198,7 +203,7 @@ export function useOnlineGame(sambungan: SambunganRuang, audio: Suara, kanvasSia
     };
   }, []);
 
-  const canAct = kursi !== null && !!state && !busy && !menunggu && jendelaTerbuka && !state.session.result && state.session.turn === seat;
+  const canAct = kursi !== null && !terkunci && !!state && !busy && !menunggu && jendelaTerbuka && !state.session.result && state.session.turn === seat;
 
   const play = useCallback((move: Move) => {
     if (!canAct || move.seat !== seat) return;

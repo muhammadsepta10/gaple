@@ -1,7 +1,7 @@
 import { chooseMove, type SeatView } from '@gaple/aturan';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
 import type { Room } from '@colyseus/sdk';
-import { VERSI_PROTOKOL, type Pesan } from '@gaple/ruang';
+import { KODE_TUTUP_DIGANTIKAN, VERSI_PROTOKOL, type Pesan } from '@gaple/ruang';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buatServer } from '../src/server';
 
@@ -131,5 +131,53 @@ describe('server: ruang privat', () => {
   it('nama bentrok ditolak saat bergabung', async () => {
     const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
     await expect(colyseus.sdk.joinById(a.room.roomId, opsi('tok-b', 'budi'))).rejects.toThrow(/nama-dipakai/);
+  });
+
+  it('token yang sama di koneksi kedua memutus koneksi pertama; kursi tetap miliknya', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    const b = rekam(await colyseus.sdk.joinById(a.room.roomId, opsi('tok-b', 'Agus')));
+    let tutup: number | null = null;
+    a.room.onLeave((code) => { tutup = code; });
+    const a2 = rekam(await colyseus.sdk.joinById(a.room.roomId, opsi('tok-a', '')));
+    await tunggu(() => tutup !== null && a2.pesan.length > 0);
+    expect(tutup).toBe(KODE_TUTUP_DIGANTIKAN);
+    expect(a2.pesan[0]).toEqual({ jenis: 'snapshot', kursi: 0, pandangan: null, sisaPresentasi: 0 });
+    // Koneksi lama yang tertutup tidak membuat pemilik token Terputus.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(b.room.state.kursi[0]).toMatchObject({ nama: 'Budi', terputus: false });
+    expect(b.room.state.hostKursi).toBe(0);
+  });
+
+  it('pemain yang terputus di tengah ronde kembali ke kursi dan kartunya dengan token yang sama', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    const b = rekam(await colyseus.sdk.joinById(a.room.roomId, opsi('tok-b', 'Agus')));
+    a.room.send('aturKonfigurasi', { targetPoin: 10_000, balakGanda: false });
+    a.room.send('mulai');
+    await tunggu(() => b.pesan.some((p) => p.jenis === 'transisi'));
+    const kode = b.room.roomId;
+    await b.room.leave(false);
+    await tunggu(() => a.room.state.kursi[1]?.terputus === true);
+    expect(a.room.state.kursi[1]).toMatchObject({ nama: 'Agus', jenis: 'manusia' });
+
+    const b2 = rekam(await colyseus.sdk.joinById(kode, opsi('tok-b', '')));
+    await tunggu(() => b2.pesan.length > 0 && a.room.state.kursi[1]?.terputus === false);
+    const [snapshot] = b2.pesan;
+    expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: 1, pandangan: { seat: 1, config: { targetPoints: 10_000 } } });
+    if (snapshot?.jenis !== 'snapshot') throw new Error();
+    expect(snapshot.pandangan!.hand.length).toBeGreaterThan(0);
+  });
+
+  it('ruang tetap ada saat semua pemain terputus sementara; keluar ruang di lobi melepas kursi', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    const kode = a.room.roomId;
+    await a.room.leave(false);
+    const a2 = rekam(await colyseus.sdk.joinById(kode, opsi('tok-a', '')));
+    await tunggu(() => a2.pesan.length > 0);
+    expect(a2.pesan[0]).toMatchObject({ jenis: 'snapshot', kursi: 0 });
+
+    const b = rekam(await colyseus.sdk.joinById(kode, opsi('tok-b', 'Agus')));
+    b.room.send('keluar');
+    await tunggu(() => a2.room.state.kursi[1]?.jenis === 'kosong');
+    await expect(colyseus.sdk.joinById(kode, opsi('tok-b', ''))).rejects.toThrow(/nama-tidak-sah/);
   });
 });

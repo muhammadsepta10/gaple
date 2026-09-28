@@ -6,15 +6,29 @@ import { DURASI } from './durasi';
 import { durasiJendela } from './tempo';
 
 /** Naikkan hanya ketika bentuk perintah, pesan, atau event berubah. */
-export const VERSI_PROTOKOL = 2;
+export const VERSI_PROTOKOL = 3;
+
+/** Kode tutup koneksi lama saat token yang sama tersambung dari koneksi lain (tab kedua). */
+export const KODE_TUTUP_DIGANTIKAN = 4201;
 
 export const PANJANG_NAMA_MAKS = 12;
 export const TARGET_POIN_MAKS = 10_000;
 
 export type Fase = 'lobi' | 'bermain' | 'hasil';
 
-export type Orang = { readonly nama: string; readonly kursi: Seat | null };
+/** Batas waktu tenggat ruang (ms). */
+export const BATAS_WAKTU = {
+  /** Sejak giliran manusia dimulai (akhir jendela presentasi) sampai bot mengambil alih kursinya. */
+  ambilAlih: 5 * 60_000,
+  /** Host yang Terputus selama ini di luar game digantikan. */
+  pindahHost: 2 * 60_000,
+  /** Ruang tanpa satu pun orang tersambung dihapus setelah ini. */
+  hapusRuang: 10 * 60_000,
+} as const;
 
+export type Orang = { readonly nama: string; readonly kursi: Seat | null; readonly tersambung: boolean };
+
+/** Tenggat alur presentasi: langkah bot atau ronde berikutnya. */
 export type Tenggat = { readonly jenis: 'langkahBot' | 'rondeBerikutnya'; readonly pada: number };
 
 /** State ruang: data biasa yang bisa diserialisasi apa adanya. */
@@ -33,6 +47,14 @@ export type StateRuang = {
   /** Akhir jendela presentasi transisi terakhir (ms). */
   readonly jendelaSelesai: number;
   readonly tenggat: Tenggat | null;
+  /** Kursi manusia yang sedang dimainkan bot; hanya bisa kembali ke pemilik tokennya. */
+  readonly diambilAlih: readonly Seat[];
+  /** Tenggat ambil alih bot untuk giliran manusia yang sedang berjalan. */
+  readonly ambilAlih: { readonly kursi: Seat; readonly pada: number } | null;
+  /** Tenggat pindah host karena host Terputus di luar game. */
+  readonly pindahHostPada: number | null;
+  /** Tenggat hapus ruang karena tidak ada orang tersambung. */
+  readonly hapusPada: number | null;
 };
 
 export type Perintah =
@@ -42,7 +64,13 @@ export type Perintah =
   | { readonly jenis: 'kosongkan'; readonly token: string; readonly kursi: Seat }
   | { readonly jenis: 'aturKonfigurasi'; readonly token: string; readonly config: GameConfig }
   | { readonly jenis: 'mulai'; readonly token: string }
-  | { readonly jenis: 'pasang'; readonly token: string; readonly cardId: string; readonly end: End };
+  | { readonly jenis: 'pasang'; readonly token: string; readonly cardId: string; readonly end: End }
+  /** Pemain tersambung yang kursinya diambil alih bot memegang kendali lagi. */
+  | { readonly jenis: 'ambilKendali'; readonly token: string }
+  /** Di luar game melepas kursi dan nama panggilan; saat game berjalan sama dengan Terputus. */
+  | { readonly jenis: 'keluar'; readonly token: string }
+  /** Dari adaptor: koneksi terakhir token ini tertutup. */
+  | { readonly jenis: 'terputus'; readonly token: string };
 
 export type AlasanTolak =
   | 'perlu-pembaruan'
@@ -58,6 +86,8 @@ export type AlasanTolak =
   | 'kursi-host'
   | 'konfigurasi-tidak-sah'
   | 'masih-presentasi'
+  /** Kursi sedang dimainkan bot; ambil kendali dulu. */
+  | 'diambil-alih'
   /** Bentuk pesan dari klien tidak dikenali (diperiksa adaptor). */
   | 'perintah-tidak-sah'
   | RejectReason;
@@ -86,12 +116,21 @@ export type Hasil = {
   readonly pesan: readonly PesanKeluar[];
   /** Waktu tenggat terdekat; `null` jika tidak ada yang perlu dijalankan tanpa perintah. */
   readonly tenggatBerikutnya: number | null;
+  /** Tenggat hapus ruang sudah lewat: adaptor menutup ruang. */
+  readonly hapus: boolean;
 };
 
 /** Menghasilkan seed bilangan bulat baru untuk setiap pembagian kartu. */
 export type Benih = () => number;
 
-export type KursiLobi = { readonly nama: string; readonly jenis: 'kosong' | 'manusia' | 'bot' };
+export type KursiLobi = {
+  readonly nama: string;
+  readonly jenis: 'kosong' | 'manusia' | 'bot';
+  /** Pemain manusia di kursi ini sedang Terputus. */
+  readonly terputus: boolean;
+  /** Kursi manusia ini sedang dimainkan bot pengganti. */
+  readonly diambilAlih: boolean;
+};
 
 /** Proyeksi lobi publik untuk Schema: tanpa kartu dan tanpa token. */
 export type LobiPublik = {
@@ -113,13 +152,32 @@ export function buatRuang(kode: string): StateRuang {
     game: null,
     jendelaSelesai: 0,
     tenggat: null,
+    diambilAlih: [],
+    ambilAlih: null,
+    pindahHostPada: null,
+    hapusPada: null,
   };
+}
+
+type JenisTenggat = 'presentasi' | 'ambilAlih' | 'pindahHost' | 'hapusRuang';
+
+function tenggatTerdekat(state: StateRuang): { jenis: JenisTenggat; pada: number } | null {
+  const semua: [JenisTenggat, number | undefined][] = [
+    ['presentasi', state.tenggat?.pada],
+    ['ambilAlih', state.ambilAlih?.pada],
+    ['pindahHost', state.pindahHostPada ?? undefined],
+    ['hapusRuang', state.hapusPada ?? undefined],
+  ];
+  let terdekat: { jenis: JenisTenggat; pada: number } | null = null;
+  for (const [jenis, pada] of semua) if (pada !== undefined && (!terdekat || pada < terdekat.pada)) terdekat = { jenis, pada };
+  return terdekat;
 }
 
 const selesai = (state: StateRuang, pesan: readonly PesanKeluar[] = []): Hasil => ({
   state,
   pesan,
-  tenggatBerikutnya: state.tenggat?.pada ?? null,
+  tenggatBerikutnya: tenggatTerdekat(state)?.pada ?? null,
+  hapus: false,
 });
 
 const tolak = (state: StateRuang, token: string, alasan: AlasanTolak): Hasil =>
@@ -137,6 +195,11 @@ export function rapikanNama(nama: string): string | null {
 }
 
 export function terapkan(state: StateRuang, perintah: Perintah, sekarang: number, benih: Benih): Hasil {
+  const hasil = jalankanPerintah(state, perintah, sekarang, benih);
+  return hasil.state === state ? hasil : selesai(rapikan(hasil.state, sekarang), hasil.pesan);
+}
+
+function jalankanPerintah(state: StateRuang, perintah: Perintah, sekarang: number, benih: Benih): Hasil {
   switch (perintah.jenis) {
     case 'masuk': return masuk(state, perintah, sekarang);
     case 'pilihKursi': return pilihKursi(state, perintah, sekarang);
@@ -145,6 +208,9 @@ export function terapkan(state: StateRuang, perintah: Perintah, sekarang: number
     case 'aturKonfigurasi': return aturKonfigurasi(state, perintah);
     case 'mulai': return mulai(state, perintah.token, sekarang, benih);
     case 'pasang': return pasang(state, perintah, sekarang);
+    case 'ambilKendali': return ambilKendali(state, perintah.token, sekarang);
+    case 'keluar': return keluar(state, perintah.token);
+    case 'terputus': return selesai(putuskan(state, perintah.token));
   }
 }
 
@@ -152,12 +218,35 @@ export function terapkan(state: StateRuang, perintah: Perintah, sekarang: number
 export function jalankanTenggat(state: StateRuang, sekarang: number, benih: Benih): Hasil {
   const pesan: PesanKeluar[] = [];
   let current = state;
-  while (current.tenggat && current.tenggat.pada <= sekarang) {
-    const { jenis, pada } = current.tenggat;
-    const game = current.game!;
-    const langkah = jenis === 'rondeBerikutnya' ? nextSession(game, seededRandom(benih())) : langkahBot(game);
-    current = transisi(current, langkah.state, langkah.events, pada);
-    pesan.push(...pesanTransisi(current, langkah.events, sekarang));
+  for (let t = tenggatTerdekat(current); t && t.pada <= sekarang; t = tenggatTerdekat(current)) {
+    const { pada } = t;
+    switch (t.jenis) {
+      case 'presentasi': {
+        const game = current.game!;
+        const langkah = current.tenggat!.jenis === 'rondeBerikutnya' ? nextSession(game, seededRandom(benih())) : langkahBot(game);
+        current = transisi(current, langkah.state, langkah.events, pada);
+        pesan.push(...pesanTransisi(current, langkah.events, sekarang));
+        break;
+      }
+      case 'ambilAlih': {
+        const { kursi } = current.ambilAlih!;
+        current = {
+          ...current,
+          diambilAlih: [...current.diambilAlih, kursi],
+          ambilAlih: null,
+          tenggat: { jenis: 'langkahBot', pada: Math.max(pada, current.jendelaSelesai) + DURASI.botBerpikir },
+        };
+        break;
+      }
+      case 'pindahHost': {
+        const lama = current.host ? current.orang[current.host]?.kursi ?? null : null;
+        current = { ...current, host: penggantiHost(current, lama ?? 3), pindahHostPada: null };
+        break;
+      }
+      case 'hapusRuang':
+        return { state: current, pesan, tenggatBerikutnya: null, hapus: true };
+    }
+    current = rapikan(current, pada);
   }
   return selesai(current, pesan);
 }
@@ -169,9 +258,12 @@ export function proyeksiLobi(state: StateRuang): LobiPublik {
     fase: state.fase,
     kursi: SEATS.map((seat): KursiLobi => {
       const token = state.kursi[seat];
-      if (token) return { nama: state.orang[token]!.nama, jenis: 'manusia' };
-      if (adaGame && state.botSejakAwal.includes(seat)) return { nama: `Bot ${seat + 1}`, jenis: 'bot' };
-      return { nama: '', jenis: 'kosong' };
+      if (token) {
+        const orang = state.orang[token]!;
+        return { nama: orang.nama, jenis: 'manusia', terputus: !orang.tersambung, diambilAlih: state.diambilAlih.includes(seat) };
+      }
+      if (adaGame && state.botSejakAwal.includes(seat)) return { nama: `Bot ${seat + 1}`, jenis: 'bot', terputus: false, diambilAlih: false };
+      return { nama: '', jenis: 'kosong', terputus: false, diambilAlih: false };
     }),
     hostKursi: state.host ? state.orang[state.host]!.kursi : null,
     config: state.config,
@@ -181,7 +273,13 @@ export function proyeksiLobi(state: StateRuang): LobiPublik {
 function masuk(state: StateRuang, perintah: Extract<Perintah, { jenis: 'masuk' }>, sekarang: number): Hasil {
   const { token } = perintah;
   if (perintah.versi !== VERSI_PROTOKOL) return tolak(state, token, 'perlu-pembaruan');
-  if (state.orang[token]) return selesai(state, [{ untuk: token, pesan: snapshot(state, token, sekarang) }]);
+  const dikenal = state.orang[token];
+  if (dikenal) {
+    // Token yang dikenal selalu kembali ke tempatnya, termasuk kursi yang sedang diambil alih bot.
+    const tersambung = dikenal.tersambung ? state : { ...state, orang: { ...state.orang, [token]: { ...dikenal, tersambung: true } } };
+    const next = lepasBot(tersambung, token, sekarang);
+    return selesai(next, [{ untuk: token, pesan: snapshot(next, token, sekarang) }]);
+  }
   if (state.fase === 'bermain') return tolak(state, token, 'game-berjalan');
   const nama = rapikanNama(perintah.nama);
   if (nama === null) return tolak(state, token, 'nama-tidak-sah');
@@ -191,9 +289,8 @@ function masuk(state: StateRuang, perintah: Extract<Perintah, { jenis: 'masuk' }
   if (kursi === undefined) return tolak(state, token, 'ruang-penuh');
   const next: StateRuang = {
     ...state,
-    orang: { ...state.orang, [token]: { nama, kursi } },
+    orang: { ...state.orang, [token]: { nama, kursi, tersambung: true } },
     kursi: state.kursi.map((t, i) => (i === kursi ? token : t)),
-    host: state.host ?? token,
   };
   return selesai(next, [{ untuk: token, pesan: snapshot(next, token, sekarang) }]);
 }
@@ -263,7 +360,7 @@ function mulai(state: StateRuang, token: string, sekarang: number, benih: Benih)
   const tolakHost = periksaHost(state, token);
   if (tolakHost) return tolakHost;
   const awal = startGame(state.config, seededRandom(benih()));
-  const siap: StateRuang = { ...state, fase: 'bermain', botSejakAwal: SEATS.filter((s) => !state.kursi[s]) };
+  const siap: StateRuang = { ...state, fase: 'bermain', botSejakAwal: SEATS.filter((s) => !state.kursi[s]), diambilAlih: [] };
   const next = transisi(siap, awal.state, awal.events, sekarang);
   return selesai(next, pesanTransisi(next, awal.events, sekarang));
 }
@@ -272,11 +369,86 @@ function pasang(state: StateRuang, perintah: Extract<Perintah, { jenis: 'pasang'
   const { token } = perintah;
   const seat = state.orang[token]?.kursi;
   if (seat === undefined || seat === null || state.fase !== 'bermain' || !state.game) return tolak(state, token, 'bukan-pemain');
+  if (state.diambilAlih.includes(seat)) return tolak(state, token, 'diambil-alih');
   if (sekarang < state.jendelaSelesai) return tolak(state, token, 'masih-presentasi');
   const hasil = applyMove(state.game, { seat, cardId: perintah.cardId, end: perintah.end });
   if (!hasil.ok) return tolak(state, token, hasil.reason);
   const next = transisi(state, hasil.state, hasil.events, sekarang);
   return selesai(next, pesanTransisi(next, hasil.events, sekarang));
+}
+
+function ambilKendali(state: StateRuang, token: string, sekarang: number): Hasil {
+  if (!state.orang[token]) return tolak(state, token, 'bukan-pemain');
+  return selesai(lepasBot(state, token, sekarang));
+}
+
+/**
+ * Pemilik token memegang kursinya lagi dari bot pengganti. Langkah bot yang terjadwal batal;
+ * jika sedang gilirannya, tenggat ambil alih dimulai lagi dari awal.
+ */
+function lepasBot(state: StateRuang, token: string, sekarang: number): StateRuang {
+  const seat = state.orang[token]!.kursi;
+  if (seat === null || state.fase !== 'bermain' || !state.diambilAlih.includes(seat)) return state;
+  const next: StateRuang = { ...state, diambilAlih: state.diambilAlih.filter((s) => s !== seat) };
+  const session = state.game!.session;
+  if (session.turn !== seat || session.result) return next;
+  return { ...next, tenggat: null, ambilAlih: { kursi: seat, pada: Math.max(sekarang, state.jendelaSelesai) + BATAS_WAKTU.ambilAlih } };
+}
+
+function putuskan(state: StateRuang, token: string): StateRuang {
+  const orang = state.orang[token];
+  if (!orang?.tersambung) return state;
+  return { ...state, orang: { ...state.orang, [token]: { ...orang, tersambung: false } } };
+}
+
+function keluar(state: StateRuang, token: string): Hasil {
+  const orang = state.orang[token];
+  if (!orang) return tolak(state, token, 'bukan-pemain');
+  // Saat game berjalan tidak ada yang bisa meninggalkan kursi: keluar sama dengan Terputus.
+  if (state.fase === 'bermain') return selesai(putuskan(state, token));
+  const { [token]: _, ...sisaOrang } = state.orang;
+  const next: StateRuang = { ...state, orang: sisaOrang, kursi: state.kursi.map((t) => (t === token ? null : t)) };
+  if (state.host !== token) return selesai(next);
+  return selesai({ ...next, host: penggantiHost(next, orang.kursi ?? 3), pindahHostPada: null });
+}
+
+/** Pemain yang bisa memegang host: manusia tersambung yang duduk dan kursinya tidak dimainkan bot. */
+function bisaHost(state: StateRuang, token: string): boolean {
+  const orang = state.orang[token];
+  if (!orang?.tersambung || orang.kursi === null) return false;
+  return !(state.fase === 'bermain' && state.diambilAlih.includes(orang.kursi));
+}
+
+/** Pemain yang bisa memegang host berikutnya searah jarum jam dari `dari`, atau `null`. */
+function penggantiHost(state: StateRuang, dari: Seat): string | null {
+  for (let i = 1; i <= SEATS.length; i++) {
+    const token = state.kursi[(dari + i) % SEATS.length];
+    if (token && bisaHost(state, token)) return token;
+  }
+  return null;
+}
+
+/**
+ * Menjaga aturan host dan tenggat yang bergantung pada siapa yang tersambung, setelah setiap
+ * perubahan state:
+ * - host yang diambil alih bot saat game berjalan langsung digantikan;
+ * - ruang tanpa host memberi host ke pemain pertama yang bisa memegangnya;
+ * - host Terputus di luar game digantikan setelah 2 menit;
+ * - ruang tanpa orang tersambung dihapus setelah 10 menit.
+ */
+function rapikan(state: StateRuang, sekarang: number): StateRuang {
+  const berjalan = state.fase === 'bermain';
+  let host = state.host;
+  // Saat game berjalan host yang Terputus tetap host; hanya host yang diambil alih bot yang digantikan.
+  const kursiHost = host ? state.orang[host]!.kursi : null;
+  if (berjalan && kursiHost !== null && state.diambilAlih.includes(kursiHost)) host = penggantiHost(state, kursiHost);
+  host ??= penggantiHost(state, 3);
+  const hostPutus = !berjalan && host !== null && !state.orang[host]!.tersambung;
+  const pindahHostPada = hostPutus ? state.pindahHostPada ?? sekarang + BATAS_WAKTU.pindahHost : null;
+  const adaTersambung = Object.values(state.orang).some((o) => o.tersambung);
+  const hapusPada = adaTersambung ? null : state.hapusPada ?? sekarang + BATAS_WAKTU.hapusRuang;
+  if (host === state.host && pindahHostPada === state.pindahHostPada && hapusPada === state.hapusPada) return state;
+  return { ...state, host, pindahHostPada, hapusPada };
 }
 
 function langkahBot(game: GameState): Transition {
@@ -285,18 +457,30 @@ function langkahBot(game: GameState): Transition {
   return hasil;
 }
 
-/** Menerapkan hasil mesin: membuka jendela presentasi dan menjadwalkan tenggat berikutnya. */
+/**
+ * Menerapkan hasil mesin: membuka jendela presentasi dan menjadwalkan tenggat berikutnya. Giliran
+ * manusia dimulai di akhir jendela, dan sejak itu tenggat ambil alih bot berjalan.
+ */
 function transisi(state: StateRuang, game: GameState, events: readonly GameEvent[], pada: number): StateRuang {
   const jendelaSelesai = pada + durasiJendela(events);
-  const bot = !state.kursi[game.session.turn];
-  const tenggat: Tenggat | null = game.result
+  const turn = game.session.turn;
+  const bot = !state.kursi[turn] || state.diambilAlih.includes(turn);
+  const manusia = !game.result && !game.session.result && !bot;
+  const tenggat: Tenggat | null = game.result || manusia
     ? null
     : game.session.result
       ? { jenis: 'rondeBerikutnya', pada: jendelaSelesai }
-      : bot
-        ? { jenis: 'langkahBot', pada: jendelaSelesai + DURASI.botBerpikir }
-        : null;
-  return { ...state, fase: game.result ? 'hasil' : 'bermain', game, jendelaSelesai, tenggat };
+      : { jenis: 'langkahBot', pada: jendelaSelesai + DURASI.botBerpikir };
+  return {
+    ...state,
+    fase: game.result ? 'hasil' : 'bermain',
+    game,
+    jendelaSelesai,
+    tenggat,
+    ambilAlih: manusia ? { kursi: turn, pada: jendelaSelesai + BATAS_WAKTU.ambilAlih } : null,
+    // Di luar game tidak ada kursi yang dimainkan bot pengganti.
+    diambilAlih: game.result ? [] : state.diambilAlih,
+  };
 }
 
 function pesanTransisi(state: StateRuang, events: readonly GameEvent[], sekarang: number): PesanKeluar[] {

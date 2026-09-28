@@ -12,7 +12,12 @@ extend({ Container, Graphics, Text });
 
 const FONT = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 
-export type SeatInfo = { name: string; bot: boolean };
+export type SeatInfo = {
+  name: string;
+  bot: boolean;
+  /** Pemain manusia di kursi ini sedang Terputus (mode online). */
+  disconnected?: boolean;
+};
 
 type MejaProps = {
   w: number;
@@ -161,8 +166,10 @@ function SeatPill({
         .fill({ color: turn ? 0x3a2a05 : 0x0b1f16, alpha: 0.85 })
         .stroke({ color: turn ? GOLD : 0xffffff, width: 1.5, alpha: turn ? 1 : 0.25 });
       if (info.bot) g.roundRect(x + w - 36, y + h / 2 - 8, 28, 16, 8).fill(0x5b6b7a);
+      // Penanda Terputus menempel di tepi atas pil agar tidak menabrak nama dan skor.
+      if (info.disconnected) g.roundRect(x + w - 50, y - 8, 42, 15, 7.5).fill(0xa8402f).stroke({ color: 0xffffff, width: 1, alpha: 0.6 });
     },
-    [x, y, w, h, turn, info.bot],
+    [x, y, w, h, turn, info.bot, info.disconnected],
   );
   // Penanda giliran: garis emas berdenyut.
   const pulse = useCallback(() => {
@@ -181,6 +188,7 @@ function SeatPill({
       <pixiText text={info.name} x={x + 12} y={y + (compact ? 4 : 5)} resolution={2} style={{ fill: 0xffffff, fontSize: compact ? 12 : 13, fontWeight: '700', fontFamily: FONT }} />
       <pixiText text={`${points} poin · ${count} kartu`} x={x + 12} y={y + (compact ? 17 : 21)} resolution={2} style={{ fill: 0xcfe3d6, fontSize: compact ? 9.5 : 11, fontFamily: FONT }} />
       {info.bot && <pixiText text="BOT" anchor={0.5} x={x + w - 22} y={y + h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: 9, fontWeight: '800', fontFamily: FONT }} />}
+      {info.disconnected && <pixiText text="PUTUS" anchor={0.5} x={x + w - 29} y={y - 0.5} resolution={2} style={{ fill: 0xffffff, fontSize: 8.5, fontWeight: '800', fontFamily: FONT }} />}
     </pixiContainer>
   );
 }

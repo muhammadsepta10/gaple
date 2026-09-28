@@ -1,6 +1,8 @@
 export { DURASI } from './durasi';
 export { durasiEvent, durasiJendela, type EventTempo } from './tempo';
 export {
+  BATAS_WAKTU,
+  KODE_TUTUP_DIGANTIKAN,
   PANJANG_NAMA_MAKS,
   TARGET_POIN_MAKS,
   VERSI_PROTOKOL,

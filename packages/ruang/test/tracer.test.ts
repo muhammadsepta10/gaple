@@ -1,6 +1,7 @@
 import { chooseMove, type SeatView } from '@gaple/aturan';
 import { describe, expect, it } from 'vitest';
 import {
+  BATAS_WAKTU,
   DURASI,
   VERSI_PROTOKOL,
   buatRuang,
@@ -85,7 +86,9 @@ describe('ruang: tracer game online lawan bot', () => {
     const game = hasil.state.game!;
     const jendela = hasil.state.jendelaSelesai;
     if (game.session.turn === 0) {
-      expect(hasil.tenggatBerikutnya).toBeNull();
+      // Giliran manusia: hanya tenggat ambil alih bot yang berjalan.
+      expect(hasil.state.tenggat).toBeNull();
+      expect(hasil.tenggatBerikutnya).toBe(jendela + BATAS_WAKTU.ambilAlih);
     } else {
       expect(hasil.tenggatBerikutnya).toBe(jendela + DURASI.botBerpikir);
       const terlalu_awal = jalankanTenggat(hasil.state, jendela + DURASI.botBerpikir - 1, benihTetap(9));
@@ -163,7 +166,7 @@ function sampaiGiliranManusia() {
   for (let awal = 1; awal < 50; awal++) {
     const benih = benihTetap(awal);
     let hasil = terapkan(terapkan(buatRuang('KODE22'), masuk('tok-a', 'Budi'), 0, benih).state, { jenis: 'mulai', token: 'tok-a' }, 0, benih);
-    while (hasil.tenggatBerikutnya !== null) hasil = jalankanTenggat(hasil.state, hasil.tenggatBerikutnya, benih);
+    while (hasil.state.tenggat) hasil = jalankanTenggat(hasil.state, hasil.state.tenggat.pada, benih);
     if (hasil.state.game && !hasil.state.game.session.result && hasil.state.game.session.turn === 0) return { benih, hasil };
   }
   throw new Error('tidak menemukan giliran manusia');
@@ -181,8 +184,8 @@ export function mainkanSampaiSelesai(awal: number, config?: { targetPoints: numb
   for (let i = 0; i < batasLangkah; i++) {
     const game = hasil.state.game!;
     if (game.result) break;
-    if (hasil.tenggatBerikutnya !== null) {
-      hasil = jalankanTenggat(hasil.state, hasil.tenggatBerikutnya, benih);
+    if (hasil.state.tenggat) {
+      hasil = jalankanTenggat(hasil.state, hasil.state.tenggat.pada, benih);
     } else {
       const pandangan = pandanganTerakhir(hasil, 'tok-a')!;
       const langkah = chooseMove(pandangan);

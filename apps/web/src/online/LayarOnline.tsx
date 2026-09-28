@@ -8,7 +8,7 @@ import { LayarMeja } from '../LayarMeja';
 import type { SeatInfo } from '../meja/Meja';
 import {
   PESAN_KODE_TIDAK_ADA, PESAN_NAMA_TIDAK_SAH, alasanGagal, namaTerakhir, pesanGagal, pesanTolak, sambungRuang, sambungRuangBaru, tautanRuang,
-  type LobiKlien, type SambunganRuang,
+  type LobiKlien, type SambunganRuang, type StatusSambungan,
 } from './sambungan';
 import { useOnlineGame } from './useOnlineGame';
 
@@ -26,6 +26,10 @@ const tombolKedua: React.CSSProperties = { ...button, background: 'rgba(255,255,
 const tombolKecil: React.CSSProperties = { ...tombolKedua, font: '600 13px system-ui', padding: '6px 12px' };
 const masukan: React.CSSProperties = { font: '16px system-ui', padding: '10px 12px', borderRadius: 10, border: '1px solid #fff5', minWidth: 0 };
 const galatGaya: React.CSSProperties = { margin: 0, color: '#ffb3a9' };
+const overlayPenuh: React.CSSProperties = {
+  position: 'fixed', inset: 0, zIndex: 5, display: 'grid', placeItems: 'center', padding: 16,
+  background: 'rgba(0,0,0,.6)', color: '#fff', fontFamily: 'system-ui',
+};
 
 type Props = {
   audio: Suara; muted: boolean; onMute: () => void; gambar: GambarMeja;
@@ -139,11 +143,20 @@ function FormMasuk({ kodeAwal, onMasuk, onKembali }: { kodeAwal: string | null; 
 
 function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Props & { sambungan: SambunganRuang }) {
   const lobi = useSyncExternalStore(sambungan.dengarLobi, sambungan.lobiSekarang);
+  const status = useSyncExternalStore(sambungan.dengarStatus, sambungan.statusSekarang);
   const [kanvasSiap, setKanvasSiap] = useState(false);
-  const game = useOnlineGame(sambungan, audio, kanvasSiap);
+  const [kursiSaya, setKursiSaya] = useState<Seat | null>(null);
+  const diambilAlih = lobi?.fase === 'bermain' && kursiSaya !== null && !!lobi.kursi[kursiSaya]?.diambilAlih;
+  const game = useOnlineGame(sambungan, audio, kanvasSiap, status !== 'tersambung' || diambilAlih);
+  useEffect(() => setKursiSaya(game.kursi), [game.kursi]);
   /** Setelah hasil akhir, pemain memilih kembali ke lobi sambil menunggu host memulai game baru. */
   const [keLobi, setKeLobi] = useState(false);
-  useEffect(() => () => { sambungan.keluar(); audio.cancelPending(); }, [sambungan, audio]);
+  // Menutup layar (misalnya ke menu) hanya menutup koneksi; kursi dilepas lewat tombol keluar.
+  useEffect(() => () => { sambungan.tutup(); audio.cancelPending(); }, [sambungan, audio]);
+  const keluarRuang = () => {
+    sambungan.keluar();
+    onKeluar();
+  };
 
   const fase = lobi?.fase;
   useEffect(() => { if (fase === 'bermain') setKeLobi(false); }, [fase]);
@@ -151,10 +164,28 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
   // Kanvas baru dibuat setiap kali meja tampil lagi; tunggu siap sebelum presentasi (ADR 0001).
   useEffect(() => { if (!tampilMeja) setKanvasSiap(false); }, [tampilMeja]);
 
-  if (!lobi || !tampilMeja) return <Lobi sambungan={sambungan} lobi={lobi} kursiSaya={game.kursi} onKeluar={onKeluar} />;
+  const penanda = <PenandaSambungan status={status} sambungan={sambungan} onKeluar={onKeluar} />;
+  if (!lobi || !tampilMeja) {
+    return <>{penanda}<Lobi sambungan={sambungan} lobi={lobi} kursiSaya={game.kursi} onKeluar={keluarRuang} /></>;
+  }
 
-  const seats: SeatInfo[] = lobi.kursi.map((k) => ({ name: k.nama, bot: k.jenis === 'bot' }));
+  const seats: SeatInfo[] = lobi.kursi.map((k) => ({
+    name: k.nama,
+    bot: k.jenis === 'bot' || k.diambilAlih,
+    disconnected: k.jenis === 'manusia' && k.terputus,
+  }));
   return (
+    <>
+    {penanda}
+    {diambilAlih && status === 'tersambung' && (
+      <div role="status" data-testid="diambil-alih" style={{
+        position: 'fixed', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px 8px 16px', borderRadius: 999, background: 'rgba(0,0,0,.72)', color: '#fff', font: '600 14px system-ui', whiteSpace: 'nowrap',
+      }}>
+        Bot memainkan kursimu
+        <button style={{ ...button, padding: '6px 14px', fontSize: 14 }} onClick={() => sambungan.ambilKendali()}>Ambil kendali</button>
+      </div>
+    )}
     <LayarMeja
       game={game}
       seats={seats}
@@ -164,10 +195,39 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
       gambar={gambar}
       onReady={() => setKanvasSiap(true)}
       exitConfirm="Keluar dari ruang? Game tetap berjalan tanpa kamu."
-      onExit={onKeluar}
+      onExit={keluarRuang}
       onPlayAgain={() => setKeLobi(true)}
-      onBackToMenu={onKeluar}
+      onBackToMenu={keluarRuang}
     />
+    </>
+  );
+}
+
+/** Indikator "menyambung ulang…", atau layar penghalang saat ruang dibuka di tab lain atau sudah hilang. */
+function PenandaSambungan({ status, sambungan, onKeluar }: { status: StatusSambungan; sambungan: SambunganRuang; onKeluar: () => void }) {
+  if (status === 'tersambung') return null;
+  if (status === 'menyambung') {
+    return (
+      <div role="status" data-testid="menyambung-ulang" style={{
+        position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 4, padding: '8px 16px', borderRadius: 999,
+        background: 'rgba(0,0,0,.72)', color: '#fff', font: '600 14px system-ui', whiteSpace: 'nowrap',
+      }}>
+        Menyambung ulang…
+      </div>
+    );
+  }
+  return (
+    <div style={overlayPenuh}>
+      <div role="alertdialog" aria-label="Koneksi ruang" style={kartuPanel} data-testid={status === 'digantikan' ? 'digantikan' : 'ruang-hilang'}>
+        <p style={{ margin: 0, fontSize: 16 }}>
+          {status === 'digantikan'
+            ? 'Ruang ini dibuka di tab atau jendela lain. Tab ini tidak lagi tersambung.'
+            : 'Ruang sudah tidak tersedia. Minta tautan atau kode baru ke host.'}
+        </p>
+        {status === 'digantikan' && <button style={button} onClick={() => sambungan.sambungUlang()}>Pakai di tab ini</button>}
+        <button style={tombolKedua} onClick={onKeluar}>Ke menu</button>
+      </div>
+    </div>
   );
 }
 
@@ -199,6 +259,7 @@ function Lobi({ sambungan, lobi, kursiSaya, onKeluar }: {
                 <span style={{ flex: 1, minWidth: 80 }}>
                   {k.jenis === 'manusia' ? <strong>{k.nama}</strong> : <em style={{ opacity: 0.6 }}>{k.jenis === 'bot' ? `${k.nama} (bot)` : 'Kosong'}</em>}
                   {saya && ' (kamu)'}
+                  {k.jenis === 'manusia' && k.terputus && <span data-testid="terputus" style={{ color: '#ffb3a9', fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Terputus</span>}
                   {lobi?.hostKursi === i && <span style={{ color: '#ffe08a', fontSize: 12, fontWeight: 700, marginLeft: 6 }}>Host</span>}
                 </span>
                 {kosong(i) && !saya && (
