@@ -1,8 +1,9 @@
 import type { Graphics } from 'pixi.js';
 import { useCallback } from 'react';
+import { U, type Pose } from './kartuGeometry';
 
 /** Lebar dasar kartu; tinggi 2U. Semua kartu digambar pada ukuran ini lalu diskalakan. */
-export const U = 40;
+export { U } from './kartuGeometry';
 
 export const GOLD = 0xffd54a;
 
@@ -33,7 +34,7 @@ function drawBack(g: Graphics) {
   g.circle(0, 0, U * 0.18).fill({ color: 0xf2d8a7, alpha: 0.8 });
 }
 
-export type Pose = { x: number; y: number; rot: number; scale: number };
+export type { Pose } from './kartuGeometry';
 
 type CardProps = {
   pose: Pose;

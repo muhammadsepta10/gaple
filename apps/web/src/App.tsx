@@ -195,6 +195,15 @@ function Table({
           </div>
         </div>
       )}
+      {w < h && (
+        <div style={{ ...overlay, zIndex: 3, background: '#123e2b', textAlign: 'center', padding: 24, boxSizing: 'border-box' }}>
+          <div>
+            <div aria-hidden="true" style={{ fontSize: 52, marginBottom: 12 }}>↻</div>
+            <h2 style={{ fontSize: 24, margin: '0 0 8px' }}>Putar HP ke posisi landscape</h2>
+            <p style={{ margin: 0, opacity: 0.8 }}>Meja dimainkan dalam posisi mendatar.</p>
+          </div>
+        </div>
+      )}
     </>
   );
 }

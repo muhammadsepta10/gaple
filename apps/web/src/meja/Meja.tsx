@@ -4,7 +4,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DURASI } from '../durasi';
 import { CardView, GOLD } from './kartu';
-import { chainCells, straightChain, tableLayout, type Rect } from './tataLetak';
+import { layoutChain, tableLayout, type Rect } from './tataLetak';
 
 extend({ Container, Graphics, Text });
 
@@ -24,7 +24,7 @@ type MejaProps = {
   onMove: (move: Move) => void;
 };
 
-/** Meja statis: kursi lawan, rantai lurus, dan tangan pemain. */
+/** Meja statis: kursi lawan, rantai melipat, dan tangan pemain. */
 export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProps) {
   const L = useMemo(() => tableLayout(w, h), [w, h]);
   const { session } = state;
@@ -43,7 +43,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
   };
 
   const chain = useMemo(
-    () => straightChain(chainCells(session.chain.placements), L.chainArea, L.chainMaxS),
+    () => layoutChain(session.chain.placements, L.chainArea, L.chainMaxS),
     [session.chain.placements, L],
   );
 
@@ -70,8 +70,8 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, onMove }: MejaProp
       {SEATS.filter((s) => s !== humanSeat).map((seat) =>
         session.hands[seat]!.map((c, i) => <CardView key={c.id} pose={L.back(seat, i)} />),
       )}
-      {chain.poses.map(({ cell, pose }) => (
-        <CardView key={cell.card.id} pose={pose} face={{ top: cell.left, bottom: cell.right }} />
+      {chain.poses.map(({ placement, pose, face }) => (
+        <CardView key={placement.card.id} pose={pose} face={face} />
       ))}
       {hand.map((c, i) => {
         const legal = endsFor(c.id).length > 0;
