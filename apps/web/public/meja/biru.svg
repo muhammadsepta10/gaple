@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <radialGradient id="cloth"><stop stop-color="#245c76"/><stop offset="1" stop-color="#102b46"/></radialGradient>
+    <pattern id="lines" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M0 0l30 30M-15 0l30 30M15 0l30 30" stroke="#ffffff" stroke-opacity=".025"/></pattern>
+  </defs>
+  <rect width="1440" height="900" fill="url(#cloth)"/>
+  <rect width="1440" height="900" fill="url(#lines)"/>
+  <rect x="24" y="24" width="1392" height="852" rx="42" fill="none" stroke="#9cc7d0" stroke-opacity=".22" stroke-width="4"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <radialGradient id="felt"><stop stop-color="#287a51"/><stop offset="1" stop-color="#104d32"/></radialGradient>
+    <pattern id="weave" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M0 0h12M0 6h12M0 0v12M6 0v12" stroke="#ffffff" stroke-opacity=".022"/></pattern>
+  </defs>
+  <rect width="1440" height="900" fill="url(#felt)"/>
+  <rect width="1440" height="900" fill="url(#weave)"/>
+  <rect x="24" y="24" width="1392" height="852" rx="42" fill="none" stroke="#d2ba75" stroke-opacity=".18" stroke-width="4"/>
+</svg>

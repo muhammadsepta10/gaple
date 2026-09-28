@@ -64,11 +64,6 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
     [session.chain.placements, L],
   );
 
-  const drawTable = useCallback((g: Graphics) => {
-    g.clear();
-    g.rect(0, 0, w, h).fill(0x1d6b45);
-  }, [w, h]);
-
   const hand = session.hands[humanSeat]!;
   // Satu array bersaudara menjaga instance CardView saat kartu pindah dari tangan ke rantai.
   const cards: React.ReactNode[] = [];
@@ -104,7 +99,6 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
   }
   return (
     <pixiContainer ref={table}>
-      <pixiGraphics draw={drawTable} />
       {SEATS.map((seat) => (
         <SeatPill
           key={seat}

@@ -1,7 +1,8 @@
 import { Application } from '@pixi/react';
-import type { GameConfig } from '@gaple/aturan';
+import { legalMoves, type GameConfig } from '@gaple/aturan';
 import { useEffect, useState } from 'react';
 import { Suara } from './audio/suara';
+import { GAMBAR_MEJA, gambarMejaAwal, gambarMejaUrl, pilihGambarMeja, type GambarMeja } from './gambarMeja';
 import { Meja, type SeatInfo } from './meja/Meja';
 import { HUMAN_SEAT, useOfflineGame } from './offline/useOfflineGame';
 
@@ -42,7 +43,7 @@ function useWindowSize() {
   return size;
 }
 
-function Menu({ initial, onStart, muted, onMute }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void; muted: boolean; onMute: () => void }) {
+function Menu({ initial, onStart, muted, onMute, gambar, onGambar }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void; muted: boolean; onMute: () => void; gambar: GambarMeja; onGambar: (id: GambarMeja) => void }) {
   const [targetPoints, setTargetPoints] = useState(initial.targetPoints ?? 100);
   const [doubleBalak, setDoubleBalak] = useState(initial.doubleBalak ?? false);
   return (
@@ -68,6 +69,18 @@ function Menu({ initial, onStart, muted, onMute }: { initial: Partial<GameConfig
             <input type="checkbox" checked={muted} onChange={onMute} />
             Senyapkan efek suara
           </label>
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend style={{ marginBottom: 8 }}>Gambar meja</legend>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {GAMBAR_MEJA.map((item) => (
+                <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                  <input type="radio" name="gambar-meja" value={item.id} checked={gambar === item.id} onChange={() => onGambar(item.id)} />
+                  <span aria-hidden="true" style={{ width: 19, height: 19, borderRadius: 4, background: item.color, border: '1px solid #fff8' }} />
+                  {item.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
         <button style={button} onClick={() => onStart({ targetPoints, doubleBalak })}>
           Main offline
@@ -88,6 +101,7 @@ function Table({
   onExit,
   onPlayAgain,
   onBackToMenu,
+  gambar,
 }: {
   config: Partial<GameConfig>;
   audio: Suara;
@@ -96,6 +110,7 @@ function Table({
   onExit: () => void;
   onPlayAgain: () => void;
   onBackToMenu: () => void;
+  gambar: GambarMeja;
 }) {
   const { w, h } = useWindowSize();
   const [ready, setReady] = useState(false);
@@ -112,9 +127,20 @@ function Table({
 
   return (
     <>
-      <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} background={0x1d6b45} onInit={() => setReady(true)}>
-        {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} presentation={presentation} onMove={play} />}
-      </Application>
+      <div data-testid="table-background" style={{ position: 'fixed', inset: 0, backgroundColor: GAMBAR_MEJA.find((item) => item.id === gambar)!.color, backgroundImage: `url("${gambarMejaUrl(gambar)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} backgroundAlpha={0} onInit={() => setReady(true)}>
+          {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} presentation={presentation} onMove={play} />}
+        </Application>
+      </div>
+      {state && canAct && (
+        <div role="group" aria-label="Langkah tersedia" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }}>
+          {legalMoves(state).filter((move) => move.seat === HUMAN_SEAT).map((move) => (
+            <button key={`${move.cardId}-${move.end}`} data-testid="legal-move" onClick={() => play(move)}>
+              Pasang {move.cardId} ke {move.end === 'left' ? 'kiri' : 'kanan'}
+            </button>
+          ))}
+        </div>
+      )}
       <button onClick={onMute} aria-label={muted ? 'Aktifkan suara' : 'Senyapkan suara'} title={muted ? 'Aktifkan suara' : 'Senyapkan suara'}
         style={{ position: 'fixed', top: 12, right: 12, zIndex: 2, ...button, padding: '8px 14px', fontSize: 18,
           background: 'rgba(0,0,0,.65)', color: '#fff' }}>
@@ -160,7 +186,7 @@ function Table({
         </div>
       )}
       {summary && (
-        <div style={overlay}>
+        <div data-testid="session-summary" style={overlay}>
           <div style={{ textAlign: 'center', minWidth: 300 }}>
             <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>
               {summary.cause.kind === 'emptyHand'
@@ -239,6 +265,9 @@ export function App() {
   };
   const [screen, setScreen] = useState<'menu' | 'meja'>('menu');
   const [config, setConfig] = useState<Partial<GameConfig>>({});
+  const [gambar, setGambar] = useState<GambarMeja>(gambarMejaAwal);
+  useEffect(() => { if (gambar !== 'hijau') pilihGambarMeja(gambar); }, []);
+  const onGambar = (id: GambarMeja) => { setGambar(id); pilihGambarMeja(id); };
   // Keluar dan "main lagi" kembali ke menu dengan target/balak ganda game ini tetap terisi (bisa diubah);
   // "kembali ke menu" mengatur ulang ke bawaan.
   const toMenuKeepConfig = () => setScreen('menu');
@@ -247,6 +276,8 @@ export function App() {
       initial={config}
       muted={muted}
       onMute={toggleMute}
+      gambar={gambar}
+      onGambar={onGambar}
       onStart={(cfg) => {
         audio.unlock();
         setConfig(cfg);
@@ -265,6 +296,7 @@ export function App() {
         setConfig({});
         setScreen('menu');
       }}
+      gambar={gambar}
     />
   );
 }

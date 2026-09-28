@@ -7,9 +7,11 @@
     "dev": "pnpm --filter @gaple/web dev",
     "build": "pnpm --filter @gaple/web build",
     "test": "vitest run",
+    "test:e2e": "pnpm build && playwright test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "fast-check": "^4.10.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"

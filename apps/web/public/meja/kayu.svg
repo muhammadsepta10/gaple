@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <linearGradient id="wood" x2="0" y2="1"><stop stop-color="#9a6844"/><stop offset=".52" stop-color="#70482f"/><stop offset="1" stop-color="#8b5939"/></linearGradient>
+    <pattern id="grain" width="240" height="100" patternUnits="userSpaceOnUse"><path d="M0 17c70 11 140-14 240 0M0 37c80-7 132 12 240-2M0 71c90 14 175-12 240 0M0 93c88-10 150 10 240 0" fill="none" stroke="#2c170c" stroke-opacity=".15" stroke-width="3"/><path d="M0 26c65 8 158-8 240 0M0 80c77 7 180-8 240 0" fill="none" stroke="#e8b87a" stroke-opacity=".09" stroke-width="2"/></pattern>
+    <radialGradient id="shade"><stop stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#1d0c05" stop-opacity=".32"/></radialGradient>
+  </defs>
+  <rect width="1440" height="900" fill="url(#wood)"/>
+  <rect width="1440" height="900" fill="url(#grain)"/>
+  <rect width="1440" height="900" fill="url(#shade)"/>
+  <rect x="24" y="24" width="1392" height="852" rx="42" fill="none" stroke="#f1c991" stroke-opacity=".25" stroke-width="4"/>
+</svg>
