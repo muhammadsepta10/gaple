@@ -1,5 +1,5 @@
 import { chooseMove, type SeatView } from '@gaple/aturan';
-import { boot, type ColyseusTestServer } from '@colyseus/testing';
+import { ColyseusTestServer } from '@colyseus/testing';
 import type { Room } from '@colyseus/sdk';
 import { KODE_TUTUP_DIGANTIKAN, VERSI_PROTOKOL, type Pesan } from '@gaple/ruang';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -10,7 +10,13 @@ const SKALA = 1000;
 
 let colyseus: ColyseusTestServer;
 
-beforeAll(async () => { colyseus = await boot(buatServer({ skala: SKALA }), 2600); });
+beforeAll(async () => {
+  // `boot()` mengabaikan port untuk instance Server; listen sendiri agar file tes bisa berjalan paralel.
+  // Waktu dipercepat, jadi klien otomatis mengirim pesan jauh lebih rapat: batas laju dilonggarkan.
+  const server = buatServer({ skala: SKALA, batas: { buatRuangPerJam: 1000, pesanPerDetik: Infinity } });
+  await server.listen(2600);
+  colyseus = new ColyseusTestServer(server);
+});
 afterAll(async () => { await colyseus.shutdown(); });
 beforeEach(async () => { await colyseus.cleanup(); });
 
@@ -38,7 +44,7 @@ function mainOtomatis(p: Pemain) {
   };
   p.room.onMessage('pesan', (pesan: Pesan) => {
     if (pesan.jenis === 'transisi' || pesan.jenis === 'snapshot') {
-      terakhir = pesan.pandangan;
+      terakhir = pesan.pandangan as SeatView | null;
       coba(pesan.sisaPresentasi / SKALA + 1);
     } else if (pesan.alasan === 'masih-presentasi') coba(2);
   });
@@ -164,8 +170,27 @@ describe('server: ruang privat', () => {
     const [snapshot] = b2.pesan;
     expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: 1, pandangan: { seat: 1, config: { targetPoints: 10_000 } } });
     if (snapshot?.jenis !== 'snapshot') throw new Error();
-    expect(snapshot.pandangan!.hand.length).toBeGreaterThan(0);
+    expect((snapshot.pandangan as SeatView).hand.length).toBeGreaterThan(0);
   });
+
+  it('orang yang masuk saat game berjalan menjadi penonton: Schema memuat namanya, pesannya tanpa tangan siapa pun', async () => {
+    const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));
+    a.room.send('aturKonfigurasi', { targetPoin: 10_000, balakGanda: false });
+    a.room.send('mulai');
+    await tunggu(() => a.pesan.some((p) => p.jenis === 'transisi'));
+    const p = rekam(await colyseus.sdk.joinById(a.room.roomId, opsi('tok-p', 'Sari')));
+    await tunggu(() => p.pesan.length > 0 && a.room.state.penonton.length === 1);
+    expect(a.room.state.penonton.toArray()).toEqual(['Sari']);
+    const [snapshot] = p.pesan;
+    expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: null, pandangan: { sessionNumber: 1, handCounts: expect.any(Array) } });
+    // Susunan kartu publik boleh terlihat; tangan siapa pun tidak.
+    expect(JSON.stringify(snapshot)).not.toMatch(/"hand"/);
+    // Ronde berikutnya: pembagian ke penonton hanya berisi jumlah kartu.
+    mainOtomatis(a);
+    await tunggu(() => p.pesan.some((x) => x.jenis === 'transisi' && x.events.some((e) => e.type === 'dealt')), 60_000);
+    const bagi = p.pesan.flatMap((x) => (x.jenis === 'transisi' ? x.events : [])).filter((e) => e.type === 'dealt');
+    for (const e of bagi) expect(e).toMatchObject({ hand: null });
+  }, 90_000);
 
   it('ruang tetap ada saat semua pemain terputus sementara; keluar ruang di lobi melepas kursi', async () => {
     const a = rekam(await colyseus.sdk.create('ruang', opsi('tok-a', 'Budi')));

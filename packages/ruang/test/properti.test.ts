@@ -20,6 +20,7 @@ const skenarioArb = fc.record({
 });
 
 const TOKEN = ['tok-a', 'tok-b', 'tok-c', 'tok-d'];
+const PENONTON = 'tok-penonton';
 
 type Langkah = { readonly sebelum: StateRuang; readonly hasil: Hasil; readonly sekarang: number; readonly manusia: boolean };
 
@@ -42,6 +43,8 @@ function jalankan(s: { seedAwal: number; jumlahManusia: number; target: number; 
     state = hasil.state;
   };
   catat(terapkan(state, { jenis: 'mulai', token: 'tok-a' }, sekarang, benih), false);
+  // Penonton datang di tengah game dan menerima snapshot serta semua event berikutnya.
+  catat(terapkan(state, { jenis: 'masuk', token: PENONTON, nama: 'Penonton', versi: VERSI_PROTOKOL }, sekarang, benih), false);
   let i = 0;
   let ditolak = false;
   while (state.game && !state.game.result && langkah.length < batas) {
@@ -82,13 +85,15 @@ function yangRahasia(p: PesanKeluar) {
 }
 
 describe('ruang: properti', () => {
-  it('tidak ada pesan ke kursi mana pun yang memuat kartu tangan kursi lain', () => {
+  it('tidak ada pesan ke kursi mana pun yang memuat kartu tangan kursi lain, dan tidak ada pesan ke penonton yang memuat tangan siapa pun', () => {
     fc.assert(
       fc.property(skenarioArb, (s) => {
+        let kePenonton = 0;
         for (const { hasil } of jalankan(s, 600)) {
           const { state } = hasil;
           if (!state.game) continue;
           for (const keluar of hasil.pesan) {
+            if (keluar.untuk === PENONTON) kePenonton++;
             const kursi = state.orang[keluar.untuk]?.kursi ?? null;
             const terlihat = new Set(idKartu(yangRahasia(keluar)));
             for (const lain of [0, 1, 2, 3] as Seat[]) {
@@ -97,6 +102,7 @@ describe('ruang: properti', () => {
             }
           }
         }
+        expect(kePenonton).toBeGreaterThan(1);
       }),
       { numRuns: 60 },
     );
@@ -198,7 +204,7 @@ describe('ruang: properti terputus dan host', () => {
             const [snapshot] = hasil.pesan.filter((p) => p.untuk === token).map((p) => p.pesan);
             expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: seat });
             if (snapshot?.jenis !== 'snapshot') throw new Error();
-            expect(snapshot.pandangan!.hand).toEqual(sebelum.game!.session.hands[seat!]);
+            expect(snapshot.pandangan).toMatchObject({ hand: sebelum.game!.session.hands[seat!] });
             expect(snapshot.pandangan!.totals).toEqual(sebelum.game!.totals);
           }
           for (const [t, o] of Object.entries(state.orang)) expect(o.kursi).toBe(kursiAwal[t]);

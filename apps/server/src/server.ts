@@ -1,4 +1,4 @@
-import { Room, ServerError, defineRoom, defineServer, type Client } from '@colyseus/core';
+import { Room, ServerError, createEndpoint, createRouter, defineRoom, defineServer, type Client } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SEATS, type Seat } from '@gaple/aturan';
@@ -6,6 +6,7 @@ import {
   KODE_TUTUP_DIGANTIKAN, buatKodeUndangan, buatRuang, jalankanTenggat, proyeksiLobi, terapkan,
   type Benih, type Hasil, type Pesan, type Perintah, type StateRuang,
 } from '@gaple/ruang';
+import { BATAS_AWAL, pasangBatasMatchmaking, type BatasServer } from './batas';
 
 /** Proyeksi lobi publik. Kartu dan `GameState` tidak pernah masuk Schema. */
 const KursiSchema = schema({
@@ -20,6 +21,8 @@ const LobiSchema = schema({
   hostKursi: t.int8().default(-1),
   targetPoin: t.number().default(0),
   balakGanda: t.boolean().default(false),
+  /** Nama panggilan penonton yang tersambung. */
+  penonton: t.array('string'),
 }, 'Lobi');
 type Lobi = InstanceType<typeof LobiSchema>;
 
@@ -29,6 +32,8 @@ export type KonfigServer = {
    * nilai besar agar satu game selesai dalam hitungan detik.
    */
   readonly skala?: number;
+  /** Batas penyalahgunaan; yang tidak diisi memakai angka awal. */
+  readonly batas?: Partial<BatasServer>;
 };
 
 /** Seed setiap pembagian kartu dari sumber acak kriptografis. */
@@ -60,7 +65,7 @@ const PESAN_KLIEN: Record<string, (isi: Record<string, unknown>, token: string) 
 /** Kode undangan ruang aktif di proses ini; pengecekan bentrok terhadap Redis menyusul (tiket 05). */
 const kodeAktif = new Set<string>();
 
-function kelasRuang({ skala = 1 }: KonfigServer) {
+function kelasRuang({ skala = 1 }: KonfigServer, batas: BatasServer) {
   const awal = Date.now();
   const sekarang = () => awal + (Date.now() - awal) * skala;
 
@@ -71,6 +76,7 @@ function kelasRuang({ skala = 1 }: KonfigServer) {
     private timer: ReturnType<typeof setTimeout> | undefined;
 
     onCreate() {
+      this.maxMessagesPerSecond = batas.pesanPerDetik;
       this.roomId = buatKodeUndangan(acakKripto, (kode) => kodeAktif.has(kode));
       kodeAktif.add(this.roomId);
       this.ruang = buatRuang(this.roomId);
@@ -149,14 +155,24 @@ function kelasRuang({ skala = 1 }: KonfigServer) {
       this.state.hostKursi = lobi.hostKursi ?? -1;
       this.state.targetPoin = lobi.config.targetPoints;
       this.state.balakGanda = lobi.config.doubleBalak;
+      if (this.state.penonton.join('\n') !== lobi.penonton.join('\n')) {
+        this.state.penonton.clear();
+        this.state.penonton.push(...lobi.penonton);
+      }
     }
   };
 }
 
+/** Jumlah ruang aktif, untuk operator memilih waktu perawatan. */
+const kesehatan = createEndpoint('/kesehatan', { method: 'GET' }, async () => ({ ruangAktif: kodeAktif.size }));
+
 export function buatServer(konfig: KonfigServer = {}) {
+  const batas = { ...BATAS_AWAL, ...konfig.batas };
+  pasangBatasMatchmaking(batas);
   return defineServer({
     greet: false,
     transport: new WebSocketTransport(),
-    rooms: { ruang: defineRoom(kelasRuang(konfig)) },
+    rooms: { ruang: defineRoom(kelasRuang(konfig, batas)) },
+    routes: createRouter({ kesehatan }),
   });
 }

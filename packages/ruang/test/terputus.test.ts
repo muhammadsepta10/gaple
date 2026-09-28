@@ -210,7 +210,7 @@ describe('ruang: ambil alih bot', () => {
     const snap = pesanUntuk(kembali, 'tok-b')[0];
     expect(snap).toMatchObject({ jenis: 'snapshot', kursi: 1 });
     if (snap?.jenis !== 'snapshot') throw new Error();
-    expect(snap.pandangan!.hand).toEqual(alih.game!.session.hands[1]);
+    expect(snap.pandangan).toMatchObject({ hand: alih.game!.session.hands[1] });
     // Waktu langkah bot yang batal lewat: tidak terjadi apa-apa.
     expect(jalankanTenggat(kembali.state, t + DURASI.botBerpikir, benih).state).toBe(kembali.state);
     const { cardId, end } = chooseMove(seatView(kembali.state.game!, 1));

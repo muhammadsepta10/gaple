@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import type { Placement } from '@gaple/aturan';
 import { fullSet } from '../../../packages/aturan/src/kartu';
 import { layoutChain, posisiKursi, tableLayout } from '../src/meja/tataLetak';
+import { U } from '../src/meja/kartuGeometry';
 
 const placed = (a: number, b: number, end: 'left' | 'right', open: number): Placement => ({
   seat: 0,
@@ -131,5 +132,24 @@ describe('posisiKursi', () => {
     expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 0))).toEqual([0, 1, 2, 3]);
     expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 2))).toEqual([2, 3, 0, 1]);
     expect([0, 1, 2, 3].map((s) => posisiKursi(s as 0, 3))).toEqual([1, 2, 3, 0]);
+  });
+});
+
+describe('tableLayout: punggung kartu kursi bawah (penonton)', () => {
+  it('tujuh punggung kartu berjajar di bawah, di dalam layar, di bawah area susunan, dan tidak menabrak pil kursi', () => {
+    for (const [w, h] of [[844, 390], [1440, 900], [667, 375]] as const) {
+      const L = tableLayout(w, h);
+      const pil = L.pill(0);
+      for (let i = 0; i < 7; i++) {
+        const p = L.back(0, i);
+        const lebar = U * p.scale;
+        expect(p.rot).toBe(0);
+        expect(p.x - lebar / 2).toBeGreaterThanOrEqual(0);
+        expect(p.x + lebar / 2).toBeLessThanOrEqual(w);
+        expect(p.y + lebar).toBeLessThanOrEqual(h);
+        expect(p.y - lebar).toBeGreaterThanOrEqual(L.chainArea.y + L.chainArea.h);
+        expect(p.x - lebar / 2).toBeGreaterThan(pil.x + pil.w);
+      }
+    }
   });
 });

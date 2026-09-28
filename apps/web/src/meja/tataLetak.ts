@@ -49,6 +49,8 @@ export function tableLayout(w: number, h: number) {
       };
     },
     back(seat: Seat, i: number): Pose {
+      // Kursi bawah hanya digambar sebagai punggung kartu di tampilan penonton.
+      if (seat === 0) return { x: w / 2 + (i - 3) * (tw + 3), y: h - m - tw - 4, rot: 0, scale: backScale };
       if (seat === 2) return { x: w / 2 + 40 + i * (tw + 3) + tw / 2, y: m + tw + 4, rot: 0, scale: backScale };
       const x = seat === 1 ? m + sideW / 2 : w - m - sideW / 2;
       return { x, y: sideY + pillH + 14 + i * (tw + 3) + tw / 2, rot: Math.PI / 2, scale: backScale };

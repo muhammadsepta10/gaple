@@ -82,7 +82,7 @@ Kode pendek yang mengenali satu **Ruang privat**, mudah didiktekan lewat panggil
 Pemain yang memegang kendali **Ruang privat**; awalnya pembuat ruang, lalu berpindah ke pemain manusia berikutnya searah jarum jam yang masih tersambung jika host diambil alih **Bot** saat game berjalan, atau **Terputus** selama 2 menit saat game tidak berjalan. Host lama yang kembali menjadi pemain biasa. Berwenang mengatur target poin dan opsi **Balak ganda**, memindahkan atau mengosongkan **Kursi** pemain lain sebelum game dimulai, serta memulai game. Untuk hal lain, setara dengan pemain lain.
 
 **Penonton**:
-Orang di **Ruang privat** yang tidak menempati **Kursi** selama game berjalan. Dapat melihat meja dan skor, tetapi tidak melihat kartu di tangan pemain mana pun.
+Orang di **Ruang privat** yang tidak menempati **Kursi**, misalnya karena datang saat game berjalan atau saat keempat kursi sudah diisi manusia. Dapat melihat meja dan skor, tetapi tidak melihat kartu di tangan pemain mana pun. Paling banyak 8 penonton tersambung per ruang. Setelah game selesai, penonton bisa menempati kursi kosong atau kursi **Bot**.
 _Avoid_: Spectator
 
 **Terputus**:

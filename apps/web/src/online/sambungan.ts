@@ -1,7 +1,7 @@
 import { Client, type Room } from '@colyseus/sdk';
 import type { GameConfig, Move, Seat } from '@gaple/aturan';
 import {
-  KODE_TUTUP_DIGANTIKAN, PANJANG_NAMA_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan,
+  KODE_TUTUP_DIGANTIKAN, PANJANG_NAMA_MAKS, PENONTON_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan,
 } from '@gaple/ruang';
 
 /** Proyeksi lobi publik dari Schema. */
@@ -12,6 +12,8 @@ export type LobiKlien = {
   readonly hostKursi: number;
   readonly targetPoin: number;
   readonly balakGanda: boolean;
+  /** Nama panggilan penonton yang tersambung. */
+  readonly penonton: readonly string[];
 };
 
 const KUNCI_TOKEN = 'gaple.token';
@@ -51,7 +53,8 @@ const PESAN_TOLAK: Partial<Record<AlasanTolak, string>> = {
   'perlu-pembaruan': 'Versi aplikasi perlu diperbarui. Muat ulang halaman.',
   'nama-tidak-sah': PESAN_NAMA_TIDAK_SAH,
   'nama-dipakai': 'Nama panggilan sudah dipakai di ruang ini. Pilih nama lain.',
-  'ruang-penuh': 'Ruang sudah penuh.',
+  'ruang-penuh': `Ruang sudah penuh: kursi terisi dan penonton sudah ${PENONTON_MAKS} orang.`,
+  'batas-terlampaui': 'Terlalu banyak percobaan dari jaringan ini. Tunggu sebentar lalu coba lagi.',
   'game-berjalan': 'Game sedang berjalan. Coba lagi setelah game selesai.',
   'bukan-host': 'Hanya host yang bisa melakukan itu.',
   'kursi-terisi': 'Kursi itu sudah diisi pemain lain.',
@@ -163,7 +166,9 @@ export class SambunganRuang {
       } catch (err) {
         if (this.selesai) return;
         // Ruang sudah dihapus atau tidak lagi mengenali token (misalnya dikeluarkan): berhenti mencoba.
-        if (alasanGagal(err) || pesanGagal(err) === PESAN_KODE_TIDAK_ADA) this.ubahStatus('hilang');
+        // Batas laju hanya sementara: terus mencoba dengan jeda yang makin panjang.
+        const alasan = alasanGagal(err);
+        if ((alasan && alasan !== 'batas-terlampaui') || pesanGagal(err) === PESAN_KODE_TIDAK_ADA) this.ubahStatus('hilang');
         else this.sambungUlang(percobaan + 1);
       }
     }, percobaan === 0 ? 0 : jedaSambungUlang(percobaan));

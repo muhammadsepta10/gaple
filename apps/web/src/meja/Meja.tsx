@@ -26,13 +26,15 @@ type MejaProps = {
   seats: readonly SeatInfo[];
   /** Kursi manusia di layar ini; selalu digambar di bawah. */
   humanSeat: Seat;
+  /** Tampilan penonton: kursi bawah juga digambar sebagai punggung kartu, tanpa kipas tangan. */
+  penonton?: boolean;
   /** Pemain manusia boleh bertindak sekarang. */
   canAct: boolean;
   presentation: Presentation | null;
   onMove: (move: Move) => void;
 };
 
-export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMove }: MejaProps) {
+export function Meja({ w, h, state, seats, humanSeat, penonton = false, canAct, presentation, onMove }: MejaProps) {
   const L = useMemo(() => tableLayout(w, h), [w, h]);
   const pos = (seat: Seat) => posisiKursi(seat, humanSeat);
   const { session } = state;
@@ -77,7 +79,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
   for (const seat of SEATS) {
     for (let i = 0; i < session.hands[seat]!.length; i++) {
       const card = session.hands[seat]![i]!;
-      const mine = seat === humanSeat;
+      const mine = !penonton && seat === humanSeat;
       const legal = mine && endsFor(card.id).length > 0;
       const lift = mine ? pending === card.id ? 24 : legal ? 10 : 0 : 0;
       const motion = presentation?.kind === 'deal'
@@ -103,7 +105,7 @@ export function Meja({ w, h, state, seats, humanSeat, canAct, presentation, onMo
       motion={moving ? {
         key: presentation.key,
         at: presentation.at,
-        flip: presentation.seat !== humanSeat,
+        flip: penonton || presentation.seat !== humanSeat,
         origin: L.back(pos(presentation.seat), session.hands[presentation.seat]!.length),
       } : undefined}
     />);

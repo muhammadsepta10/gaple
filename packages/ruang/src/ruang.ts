@@ -1,18 +1,25 @@
 import {
-  SEATS, applyMove, chooseMove, nextSession, seatView, seededRandom, startGame,
-  type Card, type End, type GameConfig, type GameEvent, type GameState, type RejectReason, type Seat, type SeatView, type Transition,
+  SEATS, applyMove, chooseMove, nextSession, publicView, seatView, seededRandom, startGame,
+  type Card, type End, type GameConfig, type GameEvent, type GameState, type PublicView, type RejectReason, type Seat, type SeatView,
+  type Transition,
 } from '@gaple/aturan';
 import { DURASI } from './durasi';
 import { durasiJendela } from './tempo';
 
 /** Naikkan hanya ketika bentuk perintah, pesan, atau event berubah. */
-export const VERSI_PROTOKOL = 3;
+export const VERSI_PROTOKOL = 4;
 
 /** Kode tutup koneksi lama saat token yang sama tersambung dari koneksi lain (tab kedua). */
 export const KODE_TUTUP_DIGANTIKAN = 4201;
 
 export const PANJANG_NAMA_MAKS = 12;
 export const TARGET_POIN_MAKS = 10_000;
+
+/**
+ * Penonton maksimal per ruang, termasuk yang Terputus. Pendatang baru menggantikan penonton yang
+ * Terputus; jika semuanya tersambung, pendatang ditolak "ruang penuh".
+ */
+export const PENONTON_MAKS = 8;
 
 export type Fase = 'lobi' | 'bermain' | 'hasil';
 
@@ -30,6 +37,9 @@ export type Orang = { readonly nama: string; readonly kursi: Seat | null; readon
 
 /** Tenggat alur presentasi: langkah bot atau ronde berikutnya. */
 export type Tenggat = { readonly jenis: 'langkahBot' | 'rondeBerikutnya'; readonly pada: number };
+
+/** Pandangan meja untuk satu penerima: pandangan kursi untuk pemain, pandangan publik untuk penonton. */
+export type Pandangan = SeatView | PublicView;
 
 /** State ruang: data biasa yang bisa diserialisasi apa adanya. */
 export type StateRuang = {
@@ -90,6 +100,8 @@ export type AlasanTolak =
   | 'diambil-alih'
   /** Bentuk pesan dari klien tidak dikenali (diperiksa adaptor). */
   | 'perintah-tidak-sah'
+  /** Terlalu banyak membuat ruang atau menebak kode dari satu IP (diperiksa adaptor). */
+  | 'batas-terlampaui'
   | RejectReason;
 
 /** `GameEvent` yang disensor untuk satu penerima: pembagian hanya memuat tangan si penerima. */
@@ -105,8 +117,8 @@ export type EventKlien =
   | Exclude<GameEvent, { type: 'dealt' }>;
 
 export type Pesan =
-  | { readonly jenis: 'snapshot'; readonly kursi: Seat | null; readonly pandangan: SeatView | null; readonly sisaPresentasi: number }
-  | { readonly jenis: 'transisi'; readonly events: readonly EventKlien[]; readonly pandangan: SeatView; readonly sisaPresentasi: number }
+  | { readonly jenis: 'snapshot'; readonly kursi: Seat | null; readonly pandangan: Pandangan | null; readonly sisaPresentasi: number }
+  | { readonly jenis: 'transisi'; readonly events: readonly EventKlien[]; readonly pandangan: Pandangan; readonly sisaPresentasi: number }
   | { readonly jenis: 'ditolak'; readonly alasan: AlasanTolak };
 
 export type PesanKeluar = { readonly untuk: string; readonly pesan: Pesan };
@@ -138,6 +150,8 @@ export type LobiPublik = {
   readonly kursi: readonly KursiLobi[];
   readonly hostKursi: Seat | null;
   readonly config: GameConfig;
+  /** Nama panggilan penonton yang tersambung (orang di ruang tanpa kursi). */
+  readonly penonton: readonly string[];
 };
 
 export function buatRuang(kode: string): StateRuang {
@@ -267,6 +281,7 @@ export function proyeksiLobi(state: StateRuang): LobiPublik {
     }),
     hostKursi: state.host ? state.orang[state.host]!.kursi : null,
     config: state.config,
+    penonton: Object.values(state.orang).filter((o) => o.kursi === null && o.tersambung).map((o) => o.nama),
   };
 }
 
@@ -280,16 +295,26 @@ function masuk(state: StateRuang, perintah: Extract<Perintah, { jenis: 'masuk' }
     const next = lepasBot(tersambung, token, sekarang);
     return selesai(next, [{ untuk: token, pesan: snapshot(next, token, sekarang) }]);
   }
-  if (state.fase === 'bermain') return tolak(state, token, 'game-berjalan');
   const nama = rapikanNama(perintah.nama);
   if (nama === null) return tolak(state, token, 'nama-tidak-sah');
   const dipakai = Object.values(state.orang).some((o) => o.nama.toLocaleLowerCase() === nama.toLocaleLowerCase());
   if (dipakai) return tolak(state, token, 'nama-dipakai');
-  const kursi = SEATS.find((s) => !state.kursi[s]);
-  if (kursi === undefined) return tolak(state, token, 'ruang-penuh');
+  // Saat game berjalan, atau semua kursi terisi manusia, pendatang baru menjadi penonton.
+  const kursi = state.fase === 'bermain' ? null : SEATS.find((s) => !state.kursi[s]) ?? null;
+  let orang = state.orang;
+  if (kursi === null) {
+    const penonton = Object.entries(orang).filter(([, o]) => o.kursi === null);
+    if (penonton.length >= PENONTON_MAKS) {
+      // Tempat penonton yang Terputus diberikan ke pendatang baru, supaya ruang tidak menumpuk orang.
+      const terputus = penonton.find(([, o]) => !o.tersambung);
+      if (!terputus) return tolak(state, token, 'ruang-penuh');
+      const { [terputus[0]]: _, ...sisaOrang } = orang;
+      orang = sisaOrang;
+    }
+  }
   const next: StateRuang = {
     ...state,
-    orang: { ...state.orang, [token]: { nama, kursi, tersambung: true } },
+    orang: { ...orang, [token]: { nama, kursi, tersambung: true } },
     kursi: state.kursi.map((t, i) => (i === kursi ? token : t)),
   };
   return selesai(next, [{ untuk: token, pesan: snapshot(next, token, sekarang) }]);
@@ -405,7 +430,7 @@ function keluar(state: StateRuang, token: string): Hasil {
   const orang = state.orang[token];
   if (!orang) return tolak(state, token, 'bukan-pemain');
   // Saat game berjalan tidak ada yang bisa meninggalkan kursi: keluar sama dengan Terputus.
-  if (state.fase === 'bermain') return selesai(putuskan(state, token));
+  if (state.fase === 'bermain' && orang.kursi !== null) return selesai(putuskan(state, token));
   const { [token]: _, ...sisaOrang } = state.orang;
   const next: StateRuang = { ...state, orang: sisaOrang, kursi: state.kursi.map((t) => (t === token ? null : t)) };
   if (state.host !== token) return selesai(next);
@@ -448,7 +473,8 @@ function rapikan(state: StateRuang, sekarang: number): StateRuang {
   host ??= penggantiHost(state, DARI_AWAL);
   const hostPutus = !berjalan && host !== null && !state.orang[host]!.tersambung;
   const pindahHostPada = hostPutus ? state.pindahHostPada ?? sekarang + BATAS_WAKTU.pindahHost : null;
-  const adaTersambung = Object.values(state.orang).some((o) => o.tersambung);
+  // Penonton tidak menahan ruang: hanya pemain yang duduk dan tersambung.
+  const adaTersambung = Object.values(state.orang).some((o) => o.tersambung && o.kursi !== null);
   const hapusPada = adaTersambung ? null : state.hapusPada ?? sekarang + BATAS_WAKTU.hapusRuang;
   if (host === state.host && pindahHostPada === state.pindahHostPada && hapusPada === state.hapusPada) return state;
   return { ...state, host, pindahHostPada, hapusPada };
@@ -488,21 +514,24 @@ function transisi(state: StateRuang, game: GameState, events: readonly GameEvent
 
 function pesanTransisi(state: StateRuang, events: readonly GameEvent[], sekarang: number): PesanKeluar[] {
   const game = state.game!;
-  return Object.entries(state.orang).flatMap(([untuk, orang]): PesanKeluar[] => {
-    if (orang.kursi === null) return [];
-    const seat = orang.kursi;
+  return Object.entries(state.orang).map(([untuk, { kursi }]): PesanKeluar => {
+    // Penonton hanya menerima jumlah kartu pada pembagian, tidak pernah tangan siapa pun.
     const tersensor = events.map((e): EventKlien =>
       e.type === 'dealt'
-        ? { type: 'dealt', session: e.session, redeal: e.redeal, hand: e.hands[seat]!, handCounts: e.hands.map((h) => h.length) }
+        ? { type: 'dealt', session: e.session, redeal: e.redeal, hand: kursi === null ? null : e.hands[kursi]!, handCounts: e.hands.map((h) => h.length) }
         : e,
     );
-    return [{ untuk, pesan: { jenis: 'transisi', events: tersensor, pandangan: seatView(game, seat), sisaPresentasi: sisa(state, sekarang) } }];
+    return { untuk, pesan: { jenis: 'transisi', events: tersensor, pandangan: pandanganUntuk(game, kursi), sisaPresentasi: sisa(state, sekarang) } };
   });
 }
+
+/** Pandangan kursi untuk pemain, pandangan publik (tanpa tangan siapa pun) untuk penonton. */
+const pandanganUntuk = (game: GameState, kursi: Seat | null): Pandangan => (kursi === null ? publicView(game) : seatView(game, kursi));
 
 function snapshot(state: StateRuang, token: string, sekarang: number): Pesan {
   const kursi = state.orang[token]!.kursi;
   // Di luar game (lobi atau setelah hasil akhir) tidak ada meja yang perlu ditampilkan ulang.
-  const pandangan = state.fase === 'bermain' && state.game && kursi !== null ? seatView(state.game, kursi) : null;
+  const game = state.fase === 'bermain' ? state.game : null;
+  const pandangan = game ? pandanganUntuk(game, kursi) : null;
   return { jenis: 'snapshot', kursi, pandangan, sisaPresentasi: pandangan ? sisa(state, sekarang) : 0 };
 }

@@ -104,18 +104,19 @@ describe('ruang: kursi di lobi', () => {
     ditolak(terapkan(sebelum, { jenis: 'pilihKursi', token: 'tok-x', kursi: 2 }, 0, benihTetap()), sebelum, 'tok-x', 'bukan-pemain');
   });
 
-  it('pendatang baru duduk di kursi kosong pertama; ruang dengan empat manusia penuh', () => {
+  it('pendatang baru duduk di kursi kosong pertama; saat empat kursi terisi manusia ia menjadi penonton', () => {
     const tiga = jalankan(ruangBerdua(), { jenis: 'pilihKursi', token: 'tok-b', kursi: 3 }, masuk('tok-c', 'Joko')).state;
     expect(namaKursi(tiga)).toEqual(['Budi', 'Joko', '', 'Agus']);
     const penuh = jalankan(tiga, masuk('tok-d', 'Sari')).state;
-    ditolak(terapkan(penuh, masuk('tok-e', 'Eko'), 0, benihTetap()), penuh, 'tok-e', 'ruang-penuh');
+    const datang = terapkan(penuh, masuk('tok-e', 'Eko'), 0, benihTetap());
+    expect(pesanUntuk(datang, 'tok-e')).toEqual([{ jenis: 'snapshot', kursi: null, pandangan: null, sisaPresentasi: 0 }]);
+    expect(proyeksiLobi(datang.state).penonton).toEqual(['Eko']);
   });
 
-  it('saat game berjalan kursi tidak bisa dipilih dan token baru ditolak "game berjalan"', () => {
+  it('saat game berjalan kursi tidak bisa dipilih', () => {
     const bermain = jalankan(ruangBerdua(), { jenis: 'mulai', token: 'tok-a' }).state;
     expect(bermain.fase).toBe('bermain');
     ditolak(terapkan(bermain, { jenis: 'pilihKursi', token: 'tok-b', kursi: 2 }, 0, benihTetap()), bermain, 'tok-b', 'game-berjalan');
-    ditolak(terapkan(bermain, masuk('tok-c', 'Joko'), 0, benihTetap()), bermain, 'tok-c', 'game-berjalan');
   });
 });
 

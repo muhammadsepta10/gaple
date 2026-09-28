@@ -27,7 +27,7 @@ function pesanUntuk(hasil: Hasil, token: string): Pesan[] {
 function pandanganTerakhir(hasil: Hasil, token: string): SeatView | null {
   const semua = pesanUntuk(hasil, token).filter((p) => p.jenis === 'transisi' || p.jenis === 'snapshot');
   const akhir = semua.at(-1);
-  return akhir && 'pandangan' in akhir ? akhir.pandangan : null;
+  return akhir && 'pandangan' in akhir ? akhir.pandangan as SeatView | null : null;
 }
 
 function ruangSiapMain(sekarang = 0) {
@@ -69,7 +69,7 @@ describe('ruang: tracer game online lawan bot', () => {
     if (transisi?.jenis !== 'transisi') throw new Error();
     const dealt = transisi.events.filter((e) => e.type === 'dealt');
     expect(transisi.sisaPresentasi).toBe(dealt.length * DURASI.bagiTotal);
-    expect(transisi.pandangan.seat).toBe(0);
+    expect(transisi.pandangan).toMatchObject({ seat: 0 });
   });
 
   it('hanya host yang bisa memulai game', () => {
@@ -150,7 +150,7 @@ describe('ruang: tracer game online lawan bot', () => {
     const [snapshot] = pesanUntuk(ulang, 'tok-a');
     expect(snapshot).toMatchObject({ jenis: 'snapshot', kursi: 0, sisaPresentasi: hasil.state.jendelaSelesai - 100 });
     if (snapshot?.jenis !== 'snapshot') throw new Error();
-    expect(snapshot.pandangan!.hand).toEqual(hasil.state.game!.session.hands[0]);
+    expect(snapshot.pandangan).toMatchObject({ hand: hasil.state.game!.session.hands[0] });
   });
 
   it('proyeksi lobi tidak pernah memuat kartu', () => {
@@ -158,7 +158,7 @@ describe('ruang: tracer game online lawan bot', () => {
     const teks = JSON.stringify(proyeksiLobi(hasil.state));
     expect(teks).not.toMatch(/"id":"\d-\d"/);
     expect(teks).not.toContain('hands');
-    expect(Object.keys(proyeksiLobi(hasil.state)).sort()).toEqual(['config', 'fase', 'hostKursi', 'kursi']);
+    expect(Object.keys(proyeksiLobi(hasil.state)).sort()).toEqual(['config', 'fase', 'hostKursi', 'kursi', 'penonton']);
   });
 });
 

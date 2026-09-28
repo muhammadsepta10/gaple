@@ -1,5 +1,5 @@
-import { SEATS, type Card, type GameResult, type GameState, type Move, type Seat, type SeatView } from '@gaple/aturan';
-import { DURASI, durasiEvent, type EventKlien, type Pesan } from '@gaple/ruang';
+import { SEATS, type Card, type GameResult, type GameState, type Move, type Seat } from '@gaple/aturan';
+import { DURASI, durasiEvent, type EventKlien, type Pandangan, type Pesan } from '@gaple/ruang';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Suara } from '../audio/suara';
 import { dealClicks, wait } from '../jadwal';
@@ -7,14 +7,18 @@ import type { TampilanGame } from '../LayarMeja';
 import type { Presentation, PresentationEvent, SessionSummary } from '../presentasi';
 import type { SambunganRuang } from './sambungan';
 
-type Transisi = { readonly events: readonly EventKlien[]; readonly pandangan: SeatView };
+type Transisi = { readonly events: readonly EventKlien[]; readonly pandangan: Pandangan };
 
 /** Kartu lawan tidak dikenal klien: diganti punggung kartu sejumlah sisa kartunya. */
 const punggung = (seat: Seat, n: number): Card[] => Array.from({ length: n }, (_, i) => ({ id: `?${seat}-${i}`, a: -1, b: -1 }));
 
-/** `GameState` tampilan dari pandangan kursi, agar meja yang sama dipakai offline dan online. */
-function stateTampilan(v: SeatView, bagi?: { hand: readonly Card[] | null; handCounts: readonly number[] }): GameState {
-  const hands = SEATS.map((s) => s === v.seat ? bagi?.hand ?? v.hand : punggung(s, bagi?.handCounts[s] ?? v.handCounts[s]!));
+/**
+ * `GameState` tampilan dari pandangan kursi, agar meja yang sama dipakai offline dan online.
+ * Pandangan publik (penonton) tidak memuat tangan siapa pun: semua kursi menjadi punggung kartu.
+ */
+function stateTampilan(v: Pandangan, bagi?: { hand: readonly Card[] | null; handCounts: readonly number[] }): GameState {
+  const sendiri = 'seat' in v ? { seat: v.seat, hand: bagi?.hand ?? v.hand } : null;
+  const hands = SEATS.map((s) => s === sendiri?.seat ? sendiri.hand : punggung(s, bagi?.handCounts[s] ?? v.handCounts[s]!));
   const chain = bagi ? { placements: [], ends: null } : v.chain;
   return {
     config: v.config,

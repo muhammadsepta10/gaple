@@ -33,6 +33,7 @@ export function LayarMeja({
   game,
   seats,
   humanSeat,
+  penonton,
   muted,
   onMute,
   gambar,
@@ -45,6 +46,7 @@ export function LayarMeja({
   game: TampilanGame;
   seats: readonly SeatInfo[];
   humanSeat: Seat;
+  penonton?: boolean;
   muted: boolean;
   onMute: () => void;
   gambar: GambarMeja;
@@ -64,7 +66,7 @@ export function LayarMeja({
     <>
       <div data-testid="table-background" style={{ position: 'fixed', inset: 0, backgroundColor: GAMBAR_MEJA.find((item) => item.id === gambar)!.color, backgroundImage: `url("${gambarMejaUrl(gambar)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} backgroundAlpha={0} onInit={onReady}>
-          {state && <Meja w={w} h={h} state={state} seats={seats} humanSeat={humanSeat} canAct={canAct} presentation={presentation} onMove={play} />}
+          {state && <Meja w={w} h={h} state={state} seats={seats} humanSeat={humanSeat} penonton={penonton} canAct={canAct} presentation={presentation} onMove={play} />}
         </Application>
       </div>
       {state && canAct && (

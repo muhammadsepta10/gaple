@@ -170,6 +170,8 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
   useEffect(() => { if (!tampilMeja) setKanvasSiap(false); }, [tampilMeja]);
 
   const penanda = <PenandaSambungan status={status} sambungan={sambungan} onKeluar={onKeluar} />;
+  // Orang di ruang tanpa kursi menonton meja tanpa melihat tangan siapa pun.
+  const penonton = game.kursi === null;
   if (!lobi || !tampilMeja) {
     return <>{penanda}<Lobi sambungan={sambungan} lobi={lobi} kursiSaya={game.kursi} onKeluar={keluarRuang} /></>;
   }
@@ -182,6 +184,11 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
   return (
     <>
     {penanda}
+    {penonton && (
+      <div role="status" data-testid="label-penonton" style={{ ...pilMelayang, top: 64, zIndex: 3, padding: '6px 14px', pointerEvents: 'none' }}>
+        Kamu menonton
+      </div>
+    )}
     {diambilAlih && status === 'tersambung' && (
       <div role="status" data-testid="diambil-alih" style={{ ...pilMelayang, bottom: 16, zIndex: 3, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 16px' }}>
         Bot memainkan kursimu
@@ -192,11 +199,12 @@ function RuangOnline({ sambungan, audio, muted, onMute, gambar, onKeluar }: Prop
       game={game}
       seats={seats}
       humanSeat={game.seat}
+      penonton={penonton}
       muted={muted}
       onMute={onMute}
       gambar={gambar}
       onReady={() => setKanvasSiap(true)}
-      exitConfirm="Keluar dari ruang? Game tetap berjalan tanpa kamu."
+      exitConfirm={penonton ? 'Berhenti menonton dan keluar dari ruang?' : 'Keluar dari ruang? Game tetap berjalan tanpa kamu.'}
       onExit={keluarRuang}
       onPlayAgain={() => setKeLobi(true)}
       onBackToMenu={keluarRuang}
@@ -284,7 +292,12 @@ function Lobi({ sambungan, lobi, kursiSaya, onKeluar }: {
             );
           })}
         </ol>
-        {kursiSaya === null && <p style={{ margin: 0, color: '#ffe08a' }}>Kamu belum duduk. Pilih kursi kosong.</p>}
+        {!!lobi?.penonton.length && (
+          <p data-testid="penonton" style={{ margin: 0, fontSize: 14, opacity: 0.85 }}>
+            Penonton: {lobi.penonton.join(', ')}
+          </p>
+        )}
+        {kursiSaya === null && <p style={{ margin: 0, color: '#ffe08a' }}>Kamu menonton. Pilih kursi kosong untuk ikut bermain.</p>}
         {lobi && <Konfigurasi sambungan={sambungan} lobi={lobi} host={host} />}
         {tolakan && <p role="alert" style={galatGaya}>{tolakan}</p>}
         {host
