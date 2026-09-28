@@ -38,11 +38,16 @@ export type SessionState = {
 /** Sebab sesi berakhir. Kartu habis diperiksa sebelum gaplek. */
 export type SessionEndCause = { readonly kind: 'emptyHand'; readonly winner: Seat } | { readonly kind: 'gaplek'; readonly pip: number };
 
+/** Hasil game: kursi juara 1 (bisa bersama, atau kosong jika semua kalah) dan kursi yang kalah. */
+export type GameResult = { readonly champions: readonly Seat[]; readonly losers: readonly Seat[] };
+
 export type GameState = {
   readonly config: GameConfig;
   /** Total poin terakumulasi per kursi dalam game ini. */
   readonly totals: readonly number[];
   readonly session: SessionState;
+  /** Hasil game; `null` selama game berjalan. */
+  readonly result: GameResult | null;
 };
 
 export type GameEvent =
@@ -64,13 +69,28 @@ export type GameEvent =
       readonly sessionPoints: readonly number[];
       /** Total poin per kursi setelah poin sesi ini ditambahkan. */
       readonly totals: readonly number[];
-    };
+    }
+  | { readonly type: 'gameEnded'; readonly result: GameResult };
 
 export type Transition = { readonly state: GameState; readonly events: readonly GameEvent[] };
 
 const DEFAULT_CONFIG: GameConfig = { targetPoints: 100, doubleBalak: false };
 
 const hasFiveOrMoreBalak = (hand: readonly Card[]): boolean => hand.filter(isBalak).length >= 5;
+
+/**
+ * Hasil game setelah total kursi diperbarui, atau `null` jika belum ada yang mencapai atau melewati target.
+ * Kursi yang mencapai atau melewati target kalah; juara 1 adalah kursi bertotal terendah di antara sisanya
+ * (bisa bersama), atau tidak ada juara 1 jika semua kursi kalah.
+ */
+function gameResultFor(totals: readonly number[], targetPoints: number): GameResult | null {
+  const losers = SEATS.filter((s) => totals[s]! >= targetPoints);
+  if (losers.length === 0) return null;
+  const contenders = SEATS.filter((s) => !losers.includes(s));
+  if (contenders.length === 0) return { champions: [], losers };
+  const lowest = Math.min(...contenders.map((s) => totals[s]!));
+  return { champions: contenders.filter((s) => totals[s] === lowest), losers };
+}
 
 /** Membagikan 28 kartu untuk satu sesi, mengulang jika ada kursi dengan ≥5 balak. */
 function dealSession(sessionNumber: number, random: Random): { hands: Card[][]; events: GameEvent[] } {
@@ -92,7 +112,7 @@ export function startGame(config: Partial<GameConfig>, random: Random): Transiti
   const turn = SEATS.find((s) => hands[s]!.some((c) => isBalak(c) && c.a === opening.pip))!;
   const session: SessionState = { number: 1, hands, chain: { placements: [], ends: null }, opening, turn, result: null };
   const totals = SEATS.map(() => 0);
-  return { state: { config: { ...DEFAULT_CONFIG, ...config }, totals, session }, events };
+  return { state: { config: { ...DEFAULT_CONFIG, ...config }, totals, session, result: null }, events };
 }
 
 /**
@@ -100,6 +120,7 @@ export function startGame(config: Partial<GameConfig>, random: Random): Transiti
  * Pembuka: bebas memilih kartu untuk pemenang sesi, atau wajib balak n untuk pemegangnya setelah gaplek n.
  */
 export function nextSession(state: GameState, random: Random): Transition {
+  if (state.result) throw new Error('game sudah berakhir');
   const cause = state.session.result;
   if (!cause) throw new Error('sesi belum berakhir');
   const number = state.session.number + 1;
@@ -175,7 +196,9 @@ export function applyMove(state: GameState, move: Move): MoveResult {
     const points = sessionPoints(hands, winner, state.config.doubleBalak);
     const totals = state.totals.map((t, i) => t + points[i]!);
     events.push({ type: 'sessionEnded', cause, hands, sessionPoints: points, totals });
-    return { ok: true, state: { ...state, totals, session: { ...next, result: cause } }, events };
+    const result = gameResultFor(totals, state.config.targetPoints);
+    if (result) events.push({ type: 'gameEnded', result });
+    return { ok: true, state: { ...state, totals, result, session: { ...next, result: cause } }, events };
   };
   if (hands[move.seat]!.length === 0) return end({ kind: 'emptyHand', winner: move.seat });
   if (!SEATS.some((s) => movesFor(next, s).length > 0)) return end({ kind: 'gaplek', pip: newEnds.left });

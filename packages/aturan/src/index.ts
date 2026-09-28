@@ -10,6 +10,7 @@ export {
   type End,
   type GameConfig,
   type GameEvent,
+  type GameResult,
   type GameState,
   type Move,
   type MoveResult,

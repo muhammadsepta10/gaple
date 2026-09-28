@@ -21,6 +21,16 @@ const button: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const overlay: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  display: 'grid',
+  placeItems: 'center',
+  background: 'rgba(0,0,0,.55)',
+  color: '#fff',
+  fontFamily: 'system-ui',
+};
+
 function useWindowSize() {
   const [size, setSize] = useState({ w: innerWidth, h: innerHeight });
   useEffect(() => {
@@ -31,9 +41,9 @@ function useWindowSize() {
   return size;
 }
 
-function Menu({ onStart }: { onStart: (config: Partial<GameConfig>) => void }) {
-  const [targetPoints, setTargetPoints] = useState(100);
-  const [doubleBalak, setDoubleBalak] = useState(false);
+function Menu({ initial, onStart }: { initial: Partial<GameConfig>; onStart: (config: Partial<GameConfig>) => void }) {
+  const [targetPoints, setTargetPoints] = useState(initial.targetPoints ?? 100);
+  const [doubleBalak, setDoubleBalak] = useState(initial.doubleBalak ?? false);
   return (
     <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#fff', fontFamily: 'system-ui' }}>
       <div style={{ textAlign: 'center' }}>
@@ -62,20 +72,57 @@ function Menu({ onStart }: { onStart: (config: Partial<GameConfig>) => void }) {
   );
 }
 
-function Table({ config }: { config: Partial<GameConfig> }) {
+/** Gabungkan nama kursi jadi satu daftar terpisah koma, untuk daftar juara 1/kalah di layar hasil. */
+const namesFor = (seats: readonly number[]) => seats.map((seat) => SEAT_INFO[seat]!.name).join(', ');
+
+function Table({
+  config,
+  onExit,
+  onPlayAgain,
+  onBackToMenu,
+}: {
+  config: Partial<GameConfig>;
+  onExit: () => void;
+  onPlayAgain: () => void;
+  onBackToMenu: () => void;
+}) {
   const { w, h } = useWindowSize();
   const [ready, setReady] = useState(false);
-  const { state, start, play, canAct, summary, redealNotice } = useOfflineGame();
+  const { state, start, play, canAct, summary, gameResult, redealNotice } = useOfflineGame();
   // State meja baru diisi setelah kanvas siap (ADR 0001).
   useEffect(() => {
     if (ready) start(config);
   }, [ready, config, start]);
+
+  const askExit = () => {
+    if (confirm('Keluar dari game yang sedang berjalan? Progres game ini akan hilang.')) onExit();
+  };
 
   return (
     <>
       <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} background={0x1d6b45} onInit={() => setReady(true)}>
         {state && <Meja w={w} h={h} state={state} seats={SEAT_INFO} humanSeat={HUMAN_SEAT} canAct={canAct} onMove={play} />}
       </Application>
+      {!gameResult && (
+        <button
+          onClick={askExit}
+          style={{
+            position: 'fixed',
+            top: 12,
+            left: 12,
+            zIndex: 1,
+            font: '600 13px system-ui',
+            padding: '8px 16px',
+            borderRadius: 999,
+            border: 0,
+            background: 'rgba(0,0,0,.5)',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          Keluar
+        </button>
+      )}
       {redealNotice && (
         <div
           style={{
@@ -96,7 +143,7 @@ function Table({ config }: { config: Partial<GameConfig> }) {
         </div>
       )}
       {summary && (
-        <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,.55)', color: '#fff', fontFamily: 'system-ui' }}>
+        <div style={overlay}>
           <div style={{ textAlign: 'center', minWidth: 300 }}>
             <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>
               {summary.cause.kind === 'emptyHand'
@@ -128,6 +175,26 @@ function Table({ config }: { config: Partial<GameConfig> }) {
           </div>
         </div>
       )}
+      {gameResult && (
+        <div style={overlay}>
+          <div style={{ textAlign: 'center', minWidth: 300 }}>
+            <h2 style={{ fontSize: 30, margin: '0 0 20px' }}>Game berakhir</h2>
+            <p style={{ fontSize: 18, margin: '0 0 10px' }}>
+              🏆 Juara 1:{' '}
+              {gameResult.champions.length > 0 ? namesFor(gameResult.champions) : 'tidak ada, semua pemain kalah'}
+            </p>
+            <p style={{ fontSize: 15, opacity: 0.8, margin: '0 0 28px' }}>Kalah: {namesFor(gameResult.losers)}</p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button style={button} onClick={onPlayAgain}>
+                Main lagi
+              </button>
+              <button style={{ ...button, background: '#3a3a3a', color: '#fff' }} onClick={onBackToMenu}>
+                Kembali ke menu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -135,14 +202,26 @@ function Table({ config }: { config: Partial<GameConfig> }) {
 export function App() {
   const [screen, setScreen] = useState<'menu' | 'meja'>('menu');
   const [config, setConfig] = useState<Partial<GameConfig>>({});
+  // Keluar dan "main lagi" kembali ke menu dengan target/balak ganda game ini tetap terisi (bisa diubah);
+  // "kembali ke menu" mengatur ulang ke bawaan.
+  const toMenuKeepConfig = () => setScreen('menu');
   return screen === 'menu' ? (
     <Menu
+      initial={config}
       onStart={(cfg) => {
         setConfig(cfg);
         setScreen('meja');
       }}
     />
   ) : (
-    <Table config={config} />
+    <Table
+      config={config}
+      onExit={toMenuKeepConfig}
+      onPlayAgain={toMenuKeepConfig}
+      onBackToMenu={() => {
+        setConfig({});
+        setScreen('menu');
+      }}
+    />
   );
 }

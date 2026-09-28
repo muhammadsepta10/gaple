@@ -7,6 +7,7 @@ import {
   type Card,
   type GameConfig,
   type GameEvent,
+  type GameResult,
   type GameState,
   type Move,
   type Seat,
@@ -34,6 +35,7 @@ const randomSeed = () => Math.floor(Math.random() * 2 ** 32);
 export function useOfflineGame() {
   const [state, setState] = useState<GameState | null>(null);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [redealNotice, setRedealNotice] = useState(false);
   const redealTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -49,6 +51,7 @@ export function useOfflineGame() {
       const { state, events } = startGame(config, seededRandom(randomSeed()));
       setState(state);
       setSummary(null);
+      setGameResult(null);
       flagRedeal(events);
     },
     [flagRedeal],
@@ -60,6 +63,12 @@ export function useOfflineGame() {
       const r = applyMove(state, move);
       if (!r.ok) return;
       setState(r.state);
+      const gameEnded = r.events.find((e) => e.type === 'gameEnded');
+      if (gameEnded && gameEnded.type === 'gameEnded') {
+        // Layar hasil akhir muncul langsung, tanpa ringkasan sesi lebih dulu.
+        setGameResult(gameEnded.result);
+        return;
+      }
       const ended = r.events.find((e) => e.type === 'sessionEnded');
       if (ended && ended.type === 'sessionEnded') {
         setSummary({ cause: ended.cause, hands: ended.hands, sessionPoints: ended.sessionPoints, totals: ended.totals });
@@ -77,9 +86,9 @@ export function useOfflineGame() {
     return () => clearTimeout(id);
   }, [state, play]);
 
-  // Ringkasan sesi tampil sebentar, lalu sesi berikutnya dimulai otomatis.
+  // Ringkasan sesi tampil sebentar, lalu sesi berikutnya dimulai otomatis (kecuali game sudah berakhir).
   useEffect(() => {
-    if (!state || !state.session.result) return;
+    if (!state || !state.session.result || state.result) return;
     const id = setTimeout(() => {
       const { state: next, events } = nextSession(state, seededRandom(randomSeed()));
       setState(next);
@@ -90,5 +99,5 @@ export function useOfflineGame() {
   }, [state, flagRedeal]);
 
   const canAct = !!state && !state.session.result && state.session.turn === HUMAN_SEAT;
-  return { state, start, play, canAct, summary, redealNotice };
+  return { state, start, play, canAct, summary, gameResult, redealNotice };
 }

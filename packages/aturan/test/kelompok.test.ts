@@ -43,6 +43,7 @@ function fixture(overrides: {
     config: { targetPoints: 100, doubleBalak: overrides.doubleBalak ?? false },
     totals: overrides.totals ?? [0, 0, 0, 0],
     session,
+    result: null,
   };
 }
 
@@ -90,7 +91,7 @@ describe('kartu habis sekaligus buntu', () => {
       turn: 0,
       result: null,
     };
-    const state: GameState = { config: { targetPoints: 100, doubleBalak: false }, totals: [0, 0, 0, 0], session };
+    const state: GameState = { config: { targetPoints: 100, doubleBalak: false }, totals: [0, 0, 0, 0], session, result: null };
     const r = applyMove(state, { seat: 0, cardId: '5-6', end: 'right' });
     expect(endedEvent(r)).toMatchObject({ type: 'sessionEnded', cause: { kind: 'emptyHand', winner: 0 } });
   });
@@ -161,7 +162,7 @@ describe('poin sesi', () => {
       turn: 0,
       result: null,
     };
-    const state: GameState = { config: { targetPoints: 100, doubleBalak: false }, totals: [0, 0, 0, 0], session };
+    const state: GameState = { config: { targetPoints: 100, doubleBalak: false }, totals: [0, 0, 0, 0], session, result: null };
     const ended = endedEvent(applyMove(state, { seat: 0, cardId: '2-6', end: 'right' }));
     expect(ended.cause).toEqual({ kind: 'gaplek', pip: 6 });
     expect(ended.sessionPoints[2]).toBe(33);
