@@ -1,12 +1,13 @@
-import { Room, ServerError, createEndpoint, createRouter, defineRoom, defineServer, type Client } from '@colyseus/core';
+import { Room, ServerError, createEndpoint, createRouter, defineRoom, defineServer, matchMaker, type Client } from '@colyseus/core';
 import { schema, t } from '@colyseus/schema';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { SEATS, type Seat } from '@gaple/aturan';
 import {
-  KODE_TUTUP_DIGANTIKAN, buatKodeUndangan, buatRuang, jalankanTenggat, proyeksiLobi, terapkan,
+  KODE_TUTUP_DIGANTIKAN, buatKodeUndangan, buatRuang, jalankanTenggat, proyeksiLobi, pulihkan, terapkan,
   type Benih, type Hasil, type Pesan, type Perintah, type StateRuang,
 } from '@gaple/ruang';
 import { BATAS_AWAL, pasangBatasMatchmaking, type BatasServer } from './batas';
+import { penyimpananMemori, type Penyimpanan } from './penyimpanan';
 
 /** Proyeksi lobi publik. Kartu dan `GameState` tidak pernah masuk Schema. */
 const KursiSchema = schema({
@@ -34,6 +35,15 @@ export type KonfigServer = {
   readonly skala?: number;
   /** Batas penyalahgunaan; yang tidak diisi memakai angka awal. */
   readonly batas?: Partial<BatasServer>;
+  /** Tempat snapshot ruang; bawaan di memori (tidak selamat dari restart proses). */
+  readonly penyimpanan?: Penyimpanan;
+  /**
+   * Jam ruang (ms). Bawaan: waktu nyata dipercepat `skala`. Tes restart memberi jam yang sama ke
+   * server lama dan baru supaya waktu simpan snapshot sebanding.
+   */
+  readonly jam?: () => number;
+  /** Sumber acak [0, 1) untuk kode undangan; bawaan kriptografis. */
+  readonly acakKode?: () => number;
 };
 
 /** Seed setiap pembagian kartu dari sumber acak kriptografis. */
@@ -62,27 +72,64 @@ const PESAN_KLIEN: Record<string, (isi: Record<string, unknown>, token: string) 
       : null,
 };
 
-/** Kode undangan ruang aktif di proses ini; pengecekan bentrok terhadap Redis menyusul (tiket 05). */
+/** Kode undangan ruang aktif di proses ini. */
 const kodeAktif = new Set<string>();
 
-function kelasRuang({ skala = 1 }: KonfigServer, batas: BatasServer) {
-  const awal = Date.now();
-  const sekarang = () => awal + (Date.now() - awal) * skala;
+/** Opsi pembuatan room dari sisi server untuk ruang yang dipulihkan saat boot. */
+type OpsiPulih = { readonly pulihkan?: unknown };
+
+type Lingkungan = {
+  readonly skala: number;
+  readonly sekarang: () => number;
+  readonly batas: BatasServer;
+  readonly penyimpanan: Penyimpanan;
+  readonly acakKode: () => number;
+  /**
+   * Hasil `pulihkan` yang menunggu room-nya dibuat ulang, dikunci kode. Hanya diisi saat boot,
+   * jadi klien yang mengirim opsi `pulihkan` tetap mendapat ruang baru biasa.
+   */
+  readonly siapPulih: Map<string, Hasil>;
+};
+
+function kelasRuang({ skala, sekarang, batas, penyimpanan, acakKode, siapPulih }: Lingkungan) {
+  /**
+   * Kode acak yang tidak bentrok dengan ruang aktif maupun kode bekas di penyimpanan. Kode langsung
+   * dicatat aktif, supaya dua pembuatan ruang yang bersamaan tidak mendapat kode yang sama.
+   */
+  async function kodeBaru(): Promise<string> {
+    for (;;) {
+      const kode = buatKodeUndangan(acakKode, (k) => kodeAktif.has(k));
+      if (!(await penyimpanan.dipakai(kode)) && !kodeAktif.has(kode)) {
+        kodeAktif.add(kode);
+        return kode;
+      }
+    }
+  }
 
   return class RuangRoom extends Room<{ state: Lobi }> {
     private ruang!: StateRuang;
     /** sessionId Colyseus → token pemain. sessionId hanya alamat koneksi. */
     private tokenKoneksi = new Map<string, string>();
     private timer: ReturnType<typeof setTimeout> | undefined;
+    /** Ruang sudah dihapus: tidak ada lagi yang disimpan, termasuk dari koneksi yang ditutup. */
+    private dihapus = false;
 
-    onCreate() {
+    async onCreate(opsi: OpsiPulih) {
       this.maxMessagesPerSecond = batas.pesanPerDetik;
-      this.roomId = buatKodeUndangan(acakKripto, (kode) => kodeAktif.has(kode));
-      kodeAktif.add(this.roomId);
-      this.ruang = buatRuang(this.roomId);
+      const pulih = typeof opsi?.pulihkan === 'string' ? siapPulih.get(opsi.pulihkan) : undefined;
+      if (pulih) kodeAktif.add(pulih.state.kode);
+      this.roomId = pulih ? pulih.state.kode : await kodeBaru();
       this.state = new LobiSchema();
       for (let i = 0; i < 4; i++) this.state.kursi.push(new KursiSchema());
-      this.sinkronLobi();
+      if (pulih) {
+        siapPulih.delete(this.roomId);
+        // Orang di ruang semuanya Terputus sampai menyambung ulang; ruang hidup sampai tenggat hapus.
+        this.autoDispose = false;
+        this.terima(pulih);
+      } else {
+        this.ruang = buatRuang(this.roomId);
+        this.sinkronLobi();
+      }
       for (const [jenis, terjemah] of Object.entries(PESAN_KLIEN)) {
         this.onMessage(jenis, (client, isi: unknown) => {
           const token = this.tokenKoneksi.get(client.sessionId);
@@ -129,13 +176,22 @@ function kelasRuang({ skala = 1 }: KonfigServer, batas: BatasServer) {
       kodeAktif.delete(this.roomId);
     }
 
-    /** Menyimpan state baru, menyinkronkan lobi, mengirim pesan per penerima, lalu menjadwalkan tenggat. */
+    /**
+     * Menyimpan state baru (ke memori room dan penyimpanan), menyinkronkan lobi, mengirim pesan
+     * per penerima, lalu menjadwalkan tenggat.
+     */
     private terima(hasil: Hasil) {
+      if (this.dihapus) return;
       if (hasil.hapus) {
+        this.dihapus = true;
         clearTimeout(this.timer);
-        void this.disconnect();
+        // Kode ditandai bekas sebelum room hilang, supaya tidak ada celah kode dipakai ulang. Jika
+        // gagal, key ruang tetap ada (kode tetap tidak dipakai ulang) dan ruang dipulihkan lalu
+        // dihapus lagi pada boot berikutnya.
+        void penyimpanan.hapus(this.roomId).catch((err) => console.error('gaple: gagal menghapus ruang', err)).finally(() => this.disconnect());
         return;
       }
+      if (hasil.state !== this.ruang) penyimpanan.simpan({ state: hasil.state, disimpanPada: sekarang() });
       this.ruang = hasil.state;
       this.sinkronLobi();
       for (const { untuk, pesan } of hasil.pesan) {
@@ -163,16 +219,54 @@ function kelasRuang({ skala = 1 }: KonfigServer, batas: BatasServer) {
   };
 }
 
+/** Selang tanda hidup server (waktu ruang); galat waktu henti setelah crash paling banyak sebesar ini. */
+const SELANG_DETAK = 5_000;
+
 /** Jumlah ruang aktif, untuk operator memilih waktu perawatan. */
 const kesehatan = createEndpoint('/kesehatan', { method: 'GET' }, async () => ({ ruangAktif: kodeAktif.size }));
 
+/**
+ * Server Colyseus ruang privat. Sebelum menerima koneksi, semua ruang di penyimpanan dipulihkan
+ * dengan kode yang sama; waktu henti tidak dihitung dalam tenggat mana pun.
+ */
 export function buatServer(konfig: KonfigServer = {}) {
+  const skala = konfig.skala ?? 1;
+  const awal = Date.now();
+  const sekarang = konfig.jam ?? (() => awal + (Date.now() - awal) * skala);
   const batas = { ...BATAS_AWAL, ...konfig.batas };
-  pasangBatasMatchmaking(batas);
-  return defineServer({
+  const penyimpanan = konfig.penyimpanan ?? penyimpananMemori();
+  const siapPulih = new Map<string, Hasil>();
+  let timerDetak: ReturnType<typeof setInterval> | undefined;
+  pasangBatasMatchmaking(batas, (kode) => penyimpanan.bekas(kode));
+  const server = defineServer({
     greet: false,
     transport: new WebSocketTransport(),
-    rooms: { ruang: defineRoom(kelasRuang(konfig, batas)) },
+    rooms: { ruang: defineRoom(kelasRuang({ skala, sekarang, batas, penyimpanan, acakKode: konfig.acakKode ?? acakKripto, siapPulih })) },
     routes: createRouter({ kesehatan }),
+    beforeListen: async () => {
+      await matchMaker.onReady;
+      // Waktu henti dimulai dari tanda hidup terakhir server sebelumnya, bukan dari perubahan
+      // terakhir ruang: setelah crash, ruang yang diam sebelum mati tidak mendapat bonus waktu.
+      const detakTerakhir = (await penyimpanan.detakTerakhir()) ?? -Infinity;
+      for (const { state, disimpanPada } of await penyimpanan.semua()) {
+        try {
+          siapPulih.set(state.kode, pulihkan(state, Math.max(disimpanPada, detakTerakhir), sekarang()));
+          await matchMaker.createRoom('ruang', { pulihkan: state.kode });
+        } catch (err) {
+          // Satu snapshot yang rusak tidak boleh menahan ruang lain dan server.
+          siapPulih.delete(state.kode);
+          console.error(`gaple: gagal memulihkan ruang ${state?.kode}`, err);
+        }
+      }
+      penyimpanan.detak(sekarang());
+      timerDetak = setInterval(() => penyimpanan.detak(sekarang()), SELANG_DETAK / skala);
+    },
   });
+  // Tanda hidup dan tulisan terakhir (orang yang terputus saat room ditutup) selesai sebelum proses berhenti.
+  server.onShutdown(() => {
+    clearInterval(timerDetak);
+    penyimpanan.detak(sekarang());
+    return penyimpanan.tutup();
+  });
+  return server;
 }

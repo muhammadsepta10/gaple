@@ -10,6 +10,7 @@ export {
   buatRuang,
   jalankanTenggat,
   proyeksiLobi,
+  pulihkan,
   rapikanNama,
   terapkan,
   type AlasanTolak,

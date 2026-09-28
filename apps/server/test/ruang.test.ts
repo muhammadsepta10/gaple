@@ -1,9 +1,9 @@
-import { chooseMove, type SeatView } from '@gaple/aturan';
+import type { SeatView } from '@gaple/aturan';
 import { ColyseusTestServer } from '@colyseus/testing';
-import type { Room } from '@colyseus/sdk';
-import { KODE_TUTUP_DIGANTIKAN, VERSI_PROTOKOL, type Pesan } from '@gaple/ruang';
+import { KODE_TUTUP_DIGANTIKAN, VERSI_PROTOKOL } from '@gaple/ruang';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buatServer } from '../src/server';
+import { mainOtomatis as mainOtomatisSkala, opsi, rekam, tunggu, type Pemain } from './bantu';
 
 /** Waktu ruang berjalan 1000× lebih cepat agar satu game selesai dalam hitungan detik. */
 const SKALA = 1000;
@@ -20,45 +20,7 @@ beforeAll(async () => {
 afterAll(async () => { await colyseus.shutdown(); });
 beforeEach(async () => { await colyseus.cleanup(); });
 
-type Pemain = { room: Room; pesan: Pesan[]; lobi: string[] };
-
-function rekam(room: Room): Pemain {
-  const pemain: Pemain = { room, pesan: [], lobi: [] };
-  room.onMessage('pesan', (p: Pesan) => pemain.pesan.push(p));
-  room.onStateChange((state) => pemain.lobi.push(JSON.stringify(state.toJSON())));
-  return pemain;
-}
-
-/** Bermain otomatis: pada gilirannya, tunggu sisa jendela presentasi lalu kirim langkah bot. */
-function mainOtomatis(p: Pemain) {
-  let tunda: ReturnType<typeof setTimeout> | undefined;
-  let terakhir: SeatView | null = null;
-  const coba = (ms: number) => {
-    clearTimeout(tunda);
-    const view = terakhir;
-    if (!view || view.gameResult || view.sessionResult || view.turn !== view.seat) return;
-    tunda = setTimeout(() => {
-      const m = chooseMove(view);
-      p.room.send('pasang', { cardId: m.cardId, end: m.end });
-    }, ms);
-  };
-  p.room.onMessage('pesan', (pesan: Pesan) => {
-    if (pesan.jenis === 'transisi' || pesan.jenis === 'snapshot') {
-      terakhir = pesan.pandangan as SeatView | null;
-      coba(pesan.sisaPresentasi / SKALA + 1);
-    } else if (pesan.alasan === 'masih-presentasi') coba(2);
-  });
-}
-
-async function tunggu(syarat: () => boolean, batas = 20_000) {
-  const mulai = Date.now();
-  while (!syarat()) {
-    if (Date.now() - mulai > batas) throw new Error('waktu habis');
-    await new Promise((r) => setTimeout(r, 5));
-  }
-}
-
-const opsi = (token: string, nama: string) => ({ token, nama, versi: VERSI_PROTOKOL });
+const mainOtomatis = (p: Pemain) => mainOtomatisSkala(p, SKALA);
 
 describe('server: ruang privat', () => {
   it('buat ruang, mulai, main melawan bot sampai hasil akhir; Schema tidak pernah berisi kartu', async () => {

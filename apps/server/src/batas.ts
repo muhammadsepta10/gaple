@@ -48,16 +48,18 @@ function ipKlien(auth: AuthContext | undefined): string {
 }
 
 const BATAS_TERLAMPAUI: AlasanTolak = 'batas-terlampaui';
+const RUANG_DIHAPUS: AlasanTolak = 'ruang-dihapus';
 
 const invokeAsli = matchMaker.controller.invokeMethod;
 
 /**
  * Membatasi matchmaking per IP: pembuatan ruang, dan bergabung ke kode yang tidak dikenal (tebakan
- * kode). Colyseus tidak punya kait untuk kode yang tidak ditemukan, jadi pemanggil matchmaking
- * global dibungkus. Server berjalan satu per proses: pemanggilan berikutnya mengganti pembungkus
- * dan batas sebelumnya, tidak menumpuk.
+ * kode). Kode yang tidak ditemukan tetapi `bekas` (ruangnya sudah dihapus) ditolak dengan alasan
+ * `ruang-dihapus`. Colyseus tidak punya kait untuk kode yang tidak ditemukan, jadi pemanggil
+ * matchmaking global dibungkus. Server berjalan satu per proses: pemanggilan berikutnya mengganti
+ * pembungkus dan batas sebelumnya, tidak menumpuk.
  */
-export function pasangBatasMatchmaking(batas: BatasServer) {
+export function pasangBatasMatchmaking(batas: BatasServer, bekas: (kode: string) => Promise<boolean>) {
   const buat = new PenghitungLaju(batas.buatRuangPerJam, 60 * 60_000);
   const tebak = new PenghitungLaju(batas.kodeTakDikenalPerMenit, 60_000);
   const ditolak = () => new ServerError(ErrorCode.MATCHMAKE_UNHANDLED, BATAS_TERLAMPAUI);
@@ -72,7 +74,11 @@ export function pasangBatasMatchmaking(batas: BatasServer) {
       if (method === 'create') buat.catat(ip, sekarang);
       return hasil;
     } catch (err) {
-      if (method === 'joinById' && (err as { code?: number }).code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID) tebak.catat(ip, sekarang);
+      if (method === 'joinById' && (err as { code?: number }).code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID) {
+        // Tautan lama ke ruang yang sudah dihapus bukan tebakan: jelaskan dan jangan dihitung.
+        if (await bekas(roomName)) throw new ServerError(ErrorCode.MATCHMAKE_INVALID_ROOM_ID, RUANG_DIHAPUS);
+        tebak.catat(ip, sekarang);
+      }
       throw err;
     }
   };

@@ -1,6 +1,6 @@
 # 05 — Keandalan: Redis, pulih setelah restart, versi protokol
 
-Status: ready-for-agent
+Status: done
 Blocked by: 03
 
 ## Parent
@@ -19,13 +19,13 @@ Restart atau deploy server tidak merusak game, dan klien dengan versi lama mempe
 
 ## Acceptance criteria
 
-- [ ] Server di-restart di tengah ronde. Semua klien menyambung ulang otomatis ke kursi dan kartu yang sama, lalu game berlanjut.
-- [ ] Waktu henti tidak mengurangi sisa tenggat ambil alih bot 5 menit, pindah host 2 menit, maupun hapus ruang 10 menit.
-- [ ] Ruang tanpa pemain manusia tersambung dihapus setelah 10 menit. Kodenya tidak pernah dipakai lagi dan ditolak dengan pesan yang jelas.
-- [ ] Klien dengan versi protokol berbeda memperbarui dirinya lalu kembali ke kursinya tanpa aksi pemain.
-- [ ] Tes paket ruang: properti bahwa urutan perintah acak dengan snapshot → `pulihkan` di titik acak menghasilkan permainan yang sama dengan tanpa restart (kecuali penanda Terputus dan geseran waktu).
-- [ ] Tes integrasi server dengan Redis sungguhan di Docker: restart proses di tengah ronde; kode yang sudah dihapus tidak dipakai ulang; versi protokol berbeda ditolak.
-- [ ] Verifikasi agent-browser: server di-restart saat game berjalan, lalu kedua sesi browser kembali dan game berlanjut.
+- [x] Server di-restart di tengah ronde. Semua klien menyambung ulang otomatis ke kursi dan kartu yang sama, lalu game berlanjut.
+- [x] Waktu henti tidak mengurangi sisa tenggat ambil alih bot 5 menit, pindah host 2 menit, maupun hapus ruang 10 menit.
+- [x] Ruang tanpa pemain manusia tersambung dihapus setelah 10 menit. Kodenya tidak pernah dipakai lagi dan ditolak dengan pesan yang jelas.
+- [x] Klien dengan versi protokol berbeda memperbarui dirinya lalu kembali ke kursinya tanpa aksi pemain.
+- [x] Tes paket ruang: properti bahwa urutan perintah acak dengan snapshot → `pulihkan` di titik acak menghasilkan permainan yang sama dengan tanpa restart (kecuali penanda Terputus dan geseran waktu).
+- [x] Tes integrasi server dengan Redis sungguhan di Docker: restart proses di tengah ronde; kode yang sudah dihapus tidak dipakai ulang; versi protokol berbeda ditolak.
+- [x] Verifikasi agent-browser: server di-restart saat game berjalan, lalu kedua sesi browser kembali dan game berlanjut.
 
 ## Blocked by
 
@@ -35,3 +35,7 @@ Restart atau deploy server tidak merusak game, dan klien dengan versi lama mempe
 
 - (dari tiket 03) Tenggat hapus ruang 10 menit (`hapusPada`, `Hasil.hapus` → `disconnect()`) sudah ada di paket ruang dan adaptor, karena room tidak lagi `autoDispose`. Tiket ini tinggal menambah penanda "bekas" saat ruang dihapus dan menggeser `hapusPada` di `pulihkan`.
 - (dari tiket 03) `SambunganRuang.sambungUlang` di `apps/web/src/online/sambungan.ts` berhenti dengan status `hilang` untuk setiap penolakan ruang, termasuk `perlu-pembaruan` dan "not found". Setelah Redis, cabang ini perlu memicu pembaruan service worker untuk `perlu-pembaruan`, dan terus mencoba selama server sedang restart.
+- (implementasi) Tanpa `REDIS_URL`, server memakai penyimpanan memori dan mencetak peringatan (untuk pengembangan). Dengan Redis, server menolak boot jika `appendonly`/`appendfsync` terbaca tidak sesuai, dan hanya memperingatkan jika CONFIG tidak bisa dibaca. File Docker Compose dengan AOF menjadi bagian tiket 06.
+- (implementasi) Snapshot hanya ditulis saat state berubah, jadi setelah crash waktu simpannya bisa jauh sebelum server mati. Server menulis tanda hidup (`<awalan>detak`) setiap 5 detik, dan `pulihkan` memakai `max(disimpanPada, detak terakhir)` sebagai awal waktu henti.
+- (implementasi) Versi protokol 5 (alasan penolakan baru `ruang-dihapus`). Pembaruan paksa dijaga sekali per 60 detik per tab (`sessionStorage`), supaya server yang lebih lama dari klien tidak membuat halaman memuat ulang terus.
+- (implementasi) Verifikasi browser di `verifikasi-05-keandalan.md`.

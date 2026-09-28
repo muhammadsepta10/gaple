@@ -7,7 +7,7 @@ import { DURASI } from './durasi';
 import { durasiJendela } from './tempo';
 
 /** Naikkan hanya ketika bentuk perintah, pesan, atau event berubah. */
-export const VERSI_PROTOKOL = 4;
+export const VERSI_PROTOKOL = 5;
 
 /** Kode tutup koneksi lama saat token yang sama tersambung dari koneksi lain (tab kedua). */
 export const KODE_TUTUP_DIGANTIKAN = 4201;
@@ -102,6 +102,8 @@ export type AlasanTolak =
   | 'perintah-tidak-sah'
   /** Terlalu banyak membuat ruang atau menebak kode dari satu IP (diperiksa adaptor). */
   | 'batas-terlampaui'
+  /** Kode undangan milik ruang yang sudah dihapus; kode tidak pernah dipakai lagi (diperiksa adaptor). */
+  | 'ruang-dihapus'
   | RejectReason;
 
 /** `GameEvent` yang disensor untuk satu penerima: pembagian hanya memuat tangan si penerima. */
@@ -263,6 +265,28 @@ export function jalankanTenggat(state: StateRuang, sekarang: number, benih: Beni
     current = rapikan(current, pada);
   }
   return selesai(current, pesan);
+}
+
+/**
+ * Menghidupkan lagi snapshot setelah server mati; `disimpanPada` adalah saat terakhir server
+ * diketahui hidup. Semua tenggat digeser sebesar lama waktu henti, jadi waktu server mati tidak
+ * ikut dihitung. Semua koneksi putus bersama server, jadi pemain manusia ditandai Terputus (dan
+ * penonton dianggap tidak tersambung) sampai kliennya menyambung ulang.
+ */
+export function pulihkan(snapshot: StateRuang, disimpanPada: number, sekarang: number): Hasil {
+  // Jam yang mundur tidak boleh memajukan tenggat.
+  const henti = Math.max(0, sekarang - disimpanPada);
+  const geser = (pada: number) => pada + henti;
+  const state: StateRuang = {
+    ...snapshot,
+    orang: Object.fromEntries(Object.entries(snapshot.orang).map(([t, o]) => [t, { ...o, tersambung: false }])),
+    jendelaSelesai: geser(snapshot.jendelaSelesai),
+    tenggat: snapshot.tenggat && { ...snapshot.tenggat, pada: geser(snapshot.tenggat.pada) },
+    ambilAlih: snapshot.ambilAlih && { ...snapshot.ambilAlih, pada: geser(snapshot.ambilAlih.pada) },
+    pindahHostPada: snapshot.pindahHostPada === null ? null : geser(snapshot.pindahHostPada),
+    hapusPada: snapshot.hapusPada === null ? null : geser(snapshot.hapusPada),
+  };
+  return selesai(rapikan(state, sekarang));
 }
 
 export function proyeksiLobi(state: StateRuang): LobiPublik {

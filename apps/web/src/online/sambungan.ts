@@ -3,6 +3,7 @@ import type { GameConfig, Move, Seat } from '@gaple/aturan';
 import {
   KODE_TUTUP_DIGANTIKAN, PANJANG_NAMA_MAKS, PENONTON_MAKS, TARGET_POIN_MAKS, VERSI_PROTOKOL, type AlasanTolak, type Fase, type KursiLobi, type Pesan,
 } from '@gaple/ruang';
+import { perbaruiAplikasi } from './pembaruan';
 
 /** Proyeksi lobi publik dari Schema. */
 export type LobiKlien = {
@@ -51,6 +52,7 @@ export const PESAN_NAMA_TIDAK_SAH = `Nama panggilan harus 1–${PANJANG_NAMA_MAK
 
 const PESAN_TOLAK: Partial<Record<AlasanTolak, string>> = {
   'perlu-pembaruan': 'Versi aplikasi perlu diperbarui. Muat ulang halaman.',
+  'ruang-dihapus': 'Ruang sudah dihapus. Minta tautan atau kode baru ke host.',
   'nama-tidak-sah': PESAN_NAMA_TIDAK_SAH,
   'nama-dipakai': 'Nama panggilan sudah dipakai di ruang ini. Pilih nama lain.',
   'ruang-penuh': `Ruang sudah penuh: kursi terisi dan penonton sudah ${PENONTON_MAKS} orang.`,
@@ -165,9 +167,11 @@ export class SambunganRuang {
         this.ubahStatus('tersambung');
       } catch (err) {
         if (this.selesai) return;
+        // Server sudah memakai versi baru (misalnya setelah deploy): perbarui aplikasi lalu muat ulang.
         // Ruang sudah dihapus atau tidak lagi mengenali token (misalnya dikeluarkan): berhenti mencoba.
-        // Batas laju hanya sementara: terus mencoba dengan jeda yang makin panjang.
+        // Batas laju dan server yang sedang restart hanya sementara: terus mencoba dengan jeda yang makin panjang.
         const alasan = alasanGagal(err);
+        if (alasan === 'perlu-pembaruan' && await perbaruiAplikasi(this.kode)) return;
         if ((alasan && alasan !== 'batas-terlampaui') || pesanGagal(err) === PESAN_KODE_TIDAK_ADA) this.ubahStatus('hilang');
         else this.sambungUlang(percobaan + 1);
       }

@@ -10,6 +10,7 @@ import {
   PESAN_KODE_TIDAK_ADA, PESAN_NAMA_TIDAK_SAH, alasanGagal, namaTerakhir, pesanGagal, pesanTolak, sambungRuang, sambungRuangBaru, tautanRuang,
   type LobiKlien, type SambunganRuang, type StatusSambungan,
 } from './sambungan';
+import { perbaruiAplikasi } from './pembaruan';
 import { useOnlineGame } from './useOnlineGame';
 
 const halaman: React.CSSProperties = {
@@ -48,8 +49,34 @@ export function LayarOnline(props: Props) {
   useEffect(() => {
     if (sambungan) history.replaceState(null, '', `${import.meta.env.BASE_URL}r/${sambungan.kode}`);
   }, [sambungan]);
+  const online = useSyncExternalStore(dengarOnline, () => navigator.onLine);
+  if (!sambungan && !online) return <ButuhInternet onKembali={props.onKeluar} />;
   if (!sambungan) return <FormMasuk kodeAwal={props.kodeAwal} onMasuk={setSambungan} onKembali={props.onKeluar} />;
   return <RuangOnline {...props} sambungan={sambungan} />;
+}
+
+function dengarOnline(fn: () => void): () => void {
+  window.addEventListener('online', fn);
+  window.addEventListener('offline', fn);
+  return () => {
+    window.removeEventListener('online', fn);
+    window.removeEventListener('offline', fn);
+  };
+}
+
+/** Mode online tanpa koneksi: beri tahu, dan mode offline tetap bisa dipakai dari menu. */
+function ButuhInternet({ onKembali }: { onKembali: () => void }) {
+  return (
+    <div style={halaman}>
+      <div style={kartuPanel} data-testid="butuh-internet">
+        <h1 style={{ fontSize: 28, margin: 0 }}>Main online</h1>
+        <p role="alert" style={{ margin: 0, fontSize: 16 }}>
+          Main online butuh koneksi internet. Sambungkan internet, atau kembali ke menu untuk main offline melawan bot.
+        </p>
+        <button type="button" style={button} onClick={onKembali}>Kembali ke menu</button>
+      </div>
+    </div>
+  );
 }
 
 function FormMasuk({ kodeAwal, onMasuk, onKembali }: { kodeAwal: string | null; onMasuk: (s: SambunganRuang) => void; onKembali: () => void }) {
@@ -60,13 +87,19 @@ function FormMasuk({ kodeAwal, onMasuk, onKembali }: { kodeAwal: string | null; 
   const [memuat, setMemuat] = useState<string | null>(kodeAwal ? 'Menyambung ke ruang…' : null);
   const lewatTautan = kodeAwal !== null;
 
-  const coba = async (label: string, sambung: () => Promise<SambunganRuang>, galatNamaKosong = true) => {
+  const coba = async (label: string, sambung: () => Promise<SambunganRuang>, kodeRuang: string | null, galatNamaKosong = true) => {
     setMemuat(label);
     setGalat(null);
     try {
       onMasuk(await sambung());
     } catch (err) {
-      if (galatNamaKosong || alasanGagal(err) !== 'nama-tidak-sah') setGalat(pesanGagal(err));
+      const alasan = alasanGagal(err);
+      // Versi lama: perbarui aplikasi lalu muat ulang di tautan ruang (membuat ruang cukup muat ulang di menu).
+      if (alasan === 'perlu-pembaruan') {
+        setMemuat('Memperbarui aplikasi…');
+        if (await perbaruiAplikasi(kodeRuang)) return;
+      }
+      if (galatNamaKosong || alasan !== 'nama-tidak-sah') setGalat(pesanGagal(err));
       setMemuat(null);
     }
   };
@@ -81,7 +114,7 @@ function FormMasuk({ kodeAwal, onMasuk, onKembali }: { kodeAwal: string | null; 
       setMemuat(null);
       return;
     }
-    void coba('Menyambung ke ruang…', () => sambungRuang(k, ''), false);
+    void coba('Menyambung ke ruang…', () => sambungRuang(k, ''), k, false);
   }, [kodeAwal]);
 
   const namaSah = () => {
@@ -90,11 +123,11 @@ function FormMasuk({ kodeAwal, onMasuk, onKembali }: { kodeAwal: string | null; 
     return false;
   };
 
-  const buat = () => { if (namaSah()) void coba('Membuat ruang…', () => sambungRuangBaru(nama)); };
+  const buat = () => { if (namaSah()) void coba('Membuat ruang…', () => sambungRuangBaru(nama), null); };
   const gabung = () => {
     const k = normalisasiKode(kode);
     if (!k) return setGalat('Kode undangan terdiri dari 6 huruf dan angka.');
-    if (namaSah()) void coba('Bergabung…', () => sambungRuang(k, nama));
+    if (namaSah()) void coba('Bergabung…', () => sambungRuang(k, nama), k);
   };
 
   // Enter di kolom nama membuat ruang kecuali kode sudah diisi; tombol Gabung selalu bergabung.
