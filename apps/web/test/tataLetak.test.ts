@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import type { Placement } from '@gaple/aturan';
 import { fullSet } from '../../../packages/aturan/src/kartu';
-import { layoutChain, posisiKursi, tableLayout } from '../src/meja/tataLetak';
+import { isiPil, layoutChain, posisiKursi, potongTeks, tableLayout } from '../src/meja/tataLetak';
 import { U } from '../src/meja/kartuGeometry';
 
 const placed = (a: number, b: number, end: 'left' | 'right', open: number): Placement => ({
@@ -185,5 +185,35 @@ describe('tableLayout: layar HP landscape', () => {
         }
       }
     }
+  });
+});
+
+describe('isiPil: nama, lencana, dan poin tidak saling menimpa', () => {
+  // "10000 poin · 7 kartu" terukur 97px (9.5px) dan 112px (11px) di Chromium; beri kelonggaran.
+  const lebarPoin = (size: number) => size * 10.8;
+
+  it('baris poin selebar pil tanpa lencana, lencana BOT sebaris nama, nama berhenti sebelum lencana', () => {
+    for (const [w, h] of [...LAYAR_HP, [1440, 900]] as const) {
+      const L = tableLayout(w, h);
+      for (const seat of [0, 1, 2, 3] as const) {
+        const r = L.pill(seat);
+        const bot = isiPil(r, L.compact, { bot: true, terputus: false });
+        expect(bot.badge.y + bot.badge.h).toBeLessThanOrEqual(bot.stats.y);
+        expect(bot.name.x + bot.name.maxW).toBeLessThanOrEqual(bot.badge.x);
+        expect(bot.stats.maxW).toBeGreaterThanOrEqual(lebarPoin(bot.stats.size));
+        expect(bot.stats.x + bot.stats.maxW).toBeLessThanOrEqual(r.x + r.w);
+        const putus = isiPil(r, L.compact, { bot: false, terputus: true });
+        expect(putus.name.x + putus.name.maxW).toBeLessThanOrEqual(putus.terputus.x);
+      }
+    }
+  });
+});
+
+describe('potongTeks', () => {
+  const ukur = (t: string) => [...t].length * 10;
+  it('membiarkan teks yang muat dan memotong yang panjang dengan elipsis', () => {
+    expect(potongTeks('Budi', 40, ukur)).toBe('Budi');
+    expect(potongTeks('Bambang Sutejo', 60, ukur)).toBe('Bamba…');
+    expect(potongTeks('Bambang Sutejo', 5, ukur)).toBe('…');
   });
 });

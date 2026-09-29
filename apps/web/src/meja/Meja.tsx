@@ -1,12 +1,12 @@
 import { extend, useTick } from '@pixi/react';
 import { legalMoves, SEATS, type End, type GameState, type Move, type Seat } from '@gaple/aturan';
-import { Container, Graphics, Text } from 'pixi.js';
+import { CanvasTextMetrics, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DURASI } from '@gaple/ruang';
 import type { Presentation } from '../presentasi';
 import { BigEffect, ChampionBadge, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
-import { layoutChain, posisiKursi, tableLayout, type Rect } from './tataLetak';
+import { isiPil, layoutChain, posisiKursi, potongTeks, tableLayout, type Rect } from './tataLetak';
 
 extend({ Container, Graphics, Text });
 
@@ -160,6 +160,13 @@ function SeatPill({
   turn: boolean;
 }) {
   const { x, y, w, h } = rect;
+  const isi = isiPil(rect, compact, { bot: info.bot, terputus: !!info.terputus });
+  const nameStyle = useMemo(() => new TextStyle({ fill: 0xffffff, fontSize: isi.name.size, fontWeight: '700', fontFamily: FONT }), [isi.name.size]);
+  const name = useMemo(
+    () => potongTeks(info.name, isi.name.maxW, (t) => CanvasTextMetrics.measureText(t, nameStyle).width),
+    [info.name, isi.name.maxW, nameStyle],
+  );
+  const { badge, terputus } = isi;
   const glow = useRef<Graphics>(null);
   const draw = useCallback(
     (g: Graphics) => {
@@ -167,11 +174,12 @@ function SeatPill({
       g.roundRect(x, y, w, h, h / 2)
         .fill({ color: turn ? 0x3a2a05 : 0x0b1f16, alpha: 0.85 })
         .stroke({ color: turn ? GOLD : 0xffffff, width: 1.5, alpha: turn ? 1 : 0.25 });
-      if (info.bot) g.roundRect(x + w - 36, y + h / 2 - 8, 28, 16, 8).fill(0x5b6b7a);
+      // Lencana BOT sebaris dengan nama agar baris poin mendapat lebar penuh pil.
+      if (info.bot) g.roundRect(badge.x, badge.y, badge.w, badge.h, badge.h / 2).fill(0x5b6b7a);
       // Penanda Terputus menempel di tepi atas pil agar tidak menabrak nama dan skor.
-      if (info.terputus) g.roundRect(x + w - 66, y - 8, 58, 15, 7.5).fill(0xa8402f).stroke({ color: 0xffffff, width: 1, alpha: 0.6 });
+      if (info.terputus) g.roundRect(terputus.x, terputus.y, terputus.w, terputus.h, 7.5).fill(0xa8402f).stroke({ color: 0xffffff, width: 1, alpha: 0.6 });
     },
-    [x, y, w, h, turn, info.bot, info.terputus],
+    [x, y, w, h, turn, info.bot, info.terputus, badge.x, badge.y, badge.w, badge.h, terputus.x, terputus.y, terputus.w, terputus.h],
   );
   // Penanda giliran: garis emas berdenyut.
   const pulse = useCallback(() => {
@@ -187,10 +195,10 @@ function SeatPill({
     <pixiContainer>
       <pixiGraphics ref={glow} draw={() => {}} />
       <pixiGraphics draw={draw} />
-      <pixiText text={info.name} x={x + 12} y={y + (compact ? 4 : 5)} resolution={2} style={{ fill: 0xffffff, fontSize: compact ? 12 : 13, fontWeight: '700', fontFamily: FONT }} />
-      <pixiText text={`${points} poin · ${count} kartu`} x={x + 12} y={y + (compact ? 17 : 21)} resolution={2} style={{ fill: 0xcfe3d6, fontSize: compact ? 9.5 : 11, fontFamily: FONT }} />
-      {info.bot && <pixiText text="BOT" anchor={0.5} x={x + w - 22} y={y + h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: 9, fontWeight: '800', fontFamily: FONT }} />}
-      {info.terputus && <pixiText text="TERPUTUS" anchor={0.5} x={x + w - 37} y={y - 0.5} resolution={2} style={{ fill: 0xffffff, fontSize: 8.5, fontWeight: '800', fontFamily: FONT }} />}
+      <pixiText text={name} x={isi.name.x} y={isi.name.y} resolution={2} style={nameStyle} />
+      <pixiText text={`${points} poin · ${count} kartu`} x={isi.stats.x} y={isi.stats.y} resolution={2} style={{ fill: 0xcfe3d6, fontSize: isi.stats.size, fontFamily: FONT }} />
+      {info.bot && <pixiText text="BOT" anchor={0.5} x={badge.x + badge.w / 2} y={badge.y + badge.h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: compact ? 8 : 9, fontWeight: '800', fontFamily: FONT }} />}
+      {info.terputus && <pixiText text="TERPUTUS" anchor={0.5} x={terputus.x + terputus.w / 2} y={terputus.y + terputus.h / 2} resolution={2} style={{ fill: 0xffffff, fontSize: 8.5, fontWeight: '800', fontFamily: FONT }} />}
     </pixiContainer>
   );
 }

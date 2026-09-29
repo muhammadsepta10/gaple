@@ -27,7 +27,8 @@ export function tableLayout(w: number, h: number) {
   const backScale = clamp(h / 1300, 0.28, 0.5);
   const tw = U * backScale;
   const pillH = compact ? 30 : 38;
-  const pillW = Math.min(136, sideW + 40);
+  // Lebar tetap: cukup untuk "10000 poin · 7 kartu" di samping nama; di HP sideW terlalu sempit untuk jadi patokan.
+  const pillW = compact ? 136 : 150;
   const sideY = h * 0.28;
   // Pil kursi samping bisa lebih lebar dari kolom sampingnya; rantai mulai setelah pil agar tidak menabrak nama.
   const sideCol = Math.max(sideW, pillW + 4);
@@ -38,7 +39,7 @@ export function tableLayout(w: number, h: number) {
     chainMaxS: clamp(h / 16, 18, 34),
     pill(seat: Seat): Rect {
       if (seat === 0) return { x: m, y: h * 0.75, w: pillW, h: pillH };
-      if (seat === 2) return { x: w / 2 - 70 - 136, y: m, w: 136, h: pillH };
+      if (seat === 2) return { x: w / 2 - 70 - pillW, y: m, w: pillW, h: pillH };
       return { x: seat === 1 ? m : w - m - pillW, y: sideY, w: pillW, h: pillH };
     },
     hand(i: number, n: number, lift: number): Pose {
@@ -60,6 +61,35 @@ export function tableLayout(w: number, h: number) {
       return { x, y: sideY + pillH + 14 + i * (tw + 3) + tw / 2, rot: Math.PI / 2, scale: backScale };
     },
   };
+}
+
+/** Isi pil kursi: nama + lencana BOT di baris atas, poin dan jumlah kartu selebar pil di baris bawah. */
+export function isiPil(rect: Rect, compact: boolean, tanda: { bot: boolean; terputus: boolean }) {
+  const { x, y, w, h } = rect;
+  const pad = 12;
+  const nameY = y + (compact ? 4 : 5);
+  const badge: Rect = { x: x + w - pad - 28, y: nameY + 1, w: 28, h: compact ? 12 : 15 };
+  // Penanda Terputus menempel di tepi atas pil, sisi kanan.
+  const terputus: Rect = { x: x + w - 66, y: y - 8, w: 58, h: 15 };
+  const nameRight = tanda.terputus ? terputus.x - 4 : tanda.bot ? badge.x - 6 : x + w - pad;
+  return {
+    name: { x: x + pad, y: nameY, maxW: nameRight - x - pad, size: compact ? 12 : 13 },
+    stats: { x: x + pad, y: y + (compact ? 17 : 21), maxW: w - 2 * pad, size: compact ? 9.5 : 11 },
+    badge,
+    terputus,
+    h,
+  };
+}
+
+/** Potong teks dengan "…" sampai muat di `maxW` menurut pengukur `ukur`. */
+export function potongTeks(teks: string, maxW: number, ukur: (t: string) => number): string {
+  if (ukur(teks) <= maxW) return teks;
+  const huruf = [...teks];
+  for (let n = huruf.length - 1; n > 0; n--) {
+    const coba = huruf.slice(0, n).join('').trimEnd() + '…';
+    if (ukur(coba) <= maxW) return coba;
+  }
+  return '…';
 }
 
 /** Ukuran minimum target ketuk ujung rantai (px). */
