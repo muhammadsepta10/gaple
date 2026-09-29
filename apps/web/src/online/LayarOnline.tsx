@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Suara } from '../audio/suara';
 import type { GambarMeja } from '../gambarMeja';
 import { button } from '../gaya';
+import { kunciLandscape } from '../layarPenuh';
 import { LayarMeja } from '../LayarMeja';
 import type { SeatInfo } from '../meja/Meja';
 import {
@@ -334,7 +335,7 @@ function Lobi({ sambungan, lobi, kursiSaya, onKeluar }: {
         {lobi && <Konfigurasi sambungan={sambungan} lobi={lobi} host={host} />}
         {tolakan && <p role="alert" style={galatGaya}>{tolakan}</p>}
         {host
-          ? <button style={button} onClick={() => { setTolakan(null); sambungan.mulai(); }}>Mulai game</button>
+          ? <button style={button} onClick={() => { setTolakan(null); void kunciLandscape(); sambungan.mulai(); }}>Mulai game</button>
           : <p style={{ margin: 0, opacity: 0.8 }}>Menunggu host memulai game…{lobi && ' Kursi kosong diisi bot.'}</p>}
         <button style={tombolKedua} onClick={onKeluar}>Keluar ruang</button>
       </div>

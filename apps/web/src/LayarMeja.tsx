@@ -3,6 +3,7 @@ import { legalMoves, type GameResult, type GameState, type Move, type Seat } fro
 import { useEffect, useState } from 'react';
 import { GAMBAR_MEJA, gambarMejaUrl, type GambarMeja } from './gambarMeja';
 import { HasilAkhir } from './hasilAkhir';
+import { bisaKunciLandscape, kunciLandscape, lepasLandscape } from './layarPenuh';
 import { Meja, type SeatInfo } from './meja/Meja';
 import type { Presentation, SessionSummary } from './presentasi';
 import { button, overlay } from './gaya';
@@ -57,6 +58,9 @@ export function LayarMeja({
   onBackToMenu: () => void;
 }) {
   const { w, h } = useWindowSize();
+  // Kunci landscape hanya berlaku selama di meja; menu dan lobi bebas diputar.
+  useEffect(() => lepasLandscape, []);
+  const [bisaKunci] = useState(() => bisaKunciLandscape());
   const { state, presentation, play, canAct, summary, gameResult, redealNotice } = game;
   const askExit = () => {
     if (confirm(exitConfirm)) onExit();
@@ -162,6 +166,11 @@ export function LayarMeja({
             <div aria-hidden="true" style={{ fontSize: 52, marginBottom: 12 }}>↻</div>
             <h2 style={{ fontSize: 24, margin: '0 0 8px' }}>Putar HP ke posisi landscape</h2>
             <p style={{ margin: 0, opacity: 0.8 }}>Meja dimainkan dalam posisi mendatar.</p>
+            {bisaKunci && (
+              <button style={{ ...button, marginTop: 20 }} onClick={() => void kunciLandscape()}>
+                Putar otomatis (layar penuh)
+              </button>
+            )}
           </div>
         </div>
       )}

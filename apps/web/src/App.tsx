@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Suara } from './audio/suara';
 import { GAMBAR_MEJA, gambarMejaAwal, pilihGambarMeja, type GambarMeja } from './gambarMeja';
 import { button } from './gaya';
+import { kunciLandscape } from './layarPenuh';
 import { LayarMeja } from './LayarMeja';
 import type { SeatInfo } from './meja/Meja';
 import { LayarOnline } from './online/LayarOnline';
@@ -160,6 +161,7 @@ export function App() {
       }}
       onStart={(cfg) => {
         audio.unlock();
+        void kunciLandscape();
         setConfig(cfg);
         setScreen('meja');
       }}
