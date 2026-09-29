@@ -64,7 +64,8 @@ export function LayarMeja({
 
   return (
     <>
-      <div data-testid="table-background" style={{ position: 'fixed', inset: 0, backgroundColor: GAMBAR_MEJA.find((item) => item.id === gambar)!.color, backgroundImage: `url("${gambarMejaUrl(gambar)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+      {/* Tekan-tahan kartu di HP tidak boleh memunculkan menu konteks atau seleksi teks. */}
+      <div data-testid="table-background" onContextMenu={(e) => e.preventDefault()} style={{ position: 'fixed', inset: 0, userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', backgroundColor: GAMBAR_MEJA.find((item) => item.id === gambar)!.color, backgroundImage: `url("${gambarMejaUrl(gambar)}")`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <Application resizeTo={window} antialias autoDensity resolution={Math.min(devicePixelRatio, 2)} backgroundAlpha={0} onInit={onReady}>
           {state && <Meja w={w} h={h} state={state} seats={seats} humanSeat={humanSeat} penonton={penonton} canAct={canAct} presentation={presentation} onMove={play} />}
         </Application>

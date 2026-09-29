@@ -1,8 +1,9 @@
-import type { Graphics } from 'pixi.js';
+import type { FederatedPointerEvent, Graphics } from 'pixi.js';
 import { useTick } from '@pixi/react';
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { DURASI } from '@gaple/ruang';
 import { U, type Pose } from './kartuGeometry';
+import type { Alat } from './fokusTangan';
 
 /** Lebar dasar kartu; tinggi 2U. Semua kartu digambar pada ukuran ini lalu diskalakan. */
 export { U } from './kartuGeometry';
@@ -44,15 +45,22 @@ type CardProps = {
   face?: { top: number; bottom: number };
   dim?: boolean;
   outline?: boolean;
-  onTap?: () => void;
+  /** Kejadian pointer di atas kartu; bila ada, kartu menerima pointer. */
+  onPointer?: (tipe: 'masuk' | 'keluar' | 'tekan' | 'lepas' | 'lepasDiLuar', alat: Alat) => void;
+  /** Kursor tangan saat mouse di atas kartu. */
+  bisaDiklik?: boolean;
+  /** Perubahan pose kecil (mis. kartu terangkat) dianimasikan singkat, bukan melompat. */
+  halus?: boolean;
   /** `origin`: titik awal terbang bila kartu belum pernah tampil (mis. kartu lawan online yang tidak dikenal). */
   motion?: { key: number; at: number; from?: Pose; origin?: Pose; delay?: number; flip?: boolean };
 };
 
-type Flight = { from: Pose; to: Pose; started: number; delay: number; flip: boolean; revealed: boolean };
+type Flight = { from: Pose; to: Pose; started: number; delay: number; flip: boolean; revealed: boolean; duration: number };
+/** Lama animasi kartu terangkat/turun (ms). */
+const DURASI_ANGKAT = 120;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps) {
+export function CardView({ pose, face, dim, outline, onPointer, bisaDiklik, halus, motion }: CardProps) {
   const graphic = useRef<Graphics>(null);
   const renderedPose = useRef<Pose | null>(null);
   const flight = useRef<Flight | null>(null);
@@ -80,6 +88,7 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
         delay: motion.delay ?? 0,
         flip: !!motion.flip,
         revealed: false,
+        duration: DURASI.kartuTerbang,
       };
       g.position.set(from.x, from.y);
       g.rotation = from.rot;
@@ -88,6 +97,8 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
         g.clear();
         drawBack(g);
       } else if (faceHidden) draw(g);
+    } else if (halus && renderedPose.current && !faceHidden) {
+      flight.current = { from: renderedPose.current, to: pose, started: performance.now(), delay: 0, flip: false, revealed: false, duration: DURASI_ANGKAT };
     } else {
       if (faceHidden) draw(g);
       flight.current = null;
@@ -102,7 +113,7 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
     const f = flight.current;
     const g = graphic.current;
     if (!f || !g) return;
-    const raw = Math.max(0, Math.min(1, (performance.now() - f.started - f.delay) / DURASI.kartuTerbang));
+    const raw = Math.max(0, Math.min(1, (performance.now() - f.started - f.delay) / f.duration));
     const eased = 1 - (1 - raw) ** 3;
     const current = {
       x: mix(f.from.x, f.to.x, eased),
@@ -130,9 +141,15 @@ export function CardView({ pose, face, dim, outline, onTap, motion }: CardProps)
       ref={graphic}
       draw={draw}
       alpha={dim ? 0.42 : 1}
-      eventMode={onTap ? 'static' : 'none'}
-      cursor={onTap ? 'pointer' : undefined}
-      onPointerTap={onTap}
+      eventMode={onPointer ? 'static' : 'none'}
+      cursor={bisaDiklik ? 'pointer' : undefined}
+      onPointerOver={onPointer && ((e: FederatedPointerEvent) => onPointer('masuk', alat(e)))}
+      onPointerOut={onPointer && ((e: FederatedPointerEvent) => onPointer('keluar', alat(e)))}
+      onPointerDown={onPointer && ((e: FederatedPointerEvent) => onPointer('tekan', alat(e)))}
+      onPointerUp={onPointer && ((e: FederatedPointerEvent) => onPointer('lepas', alat(e)))}
+      onPointerUpOutside={onPointer && ((e: FederatedPointerEvent) => onPointer('lepasDiLuar', alat(e)))}
     />
   );
 }
+
+const alat = (e: FederatedPointerEvent): Alat => (e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse');

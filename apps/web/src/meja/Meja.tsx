@@ -6,6 +6,7 @@ import { DURASI } from '@gaple/ruang';
 import type { Presentation } from '../presentasi';
 import { BigEffect, ChampionBadge, PassBubble } from './efek';
 import { CardView, GOLD } from './kartu';
+import { FOKUS_AWAL, fokusTangan, type AksiFokus } from './fokusTangan';
 import { isiPil, layoutChain, posisiKursi, potongTeks, tableLayout, type Rect } from './tataLetak';
 
 extend({ Container, Graphics, Text });
@@ -59,6 +60,17 @@ export function Meja({ w, h, state, seats, humanSeat, penonton = false, canAct, 
   const myMoves = canAct ? legalMoves(state).filter((m) => m.seat === humanSeat) : [];
   const endsFor = (cardId: string): End[] => myMoves.filter((m) => m.cardId === cardId).map((m) => m.end);
 
+  // Ref: `lepas` dan `lepasDiLuar` datang dalam satu kejadian, sebelum React sempat merender ulang.
+  const fokusRef = useRef(FOKUS_AWAL);
+  const [fokus, setFokus] = useState(FOKUS_AWAL);
+  const aksiFokus = (aksi: AksiFokus) => {
+    const hasil = fokusTangan(fokusRef.current, aksi);
+    fokusRef.current = hasil.fokus;
+    setFokus(hasil.fokus);
+    if (hasil.klik) tapHand(hasil.klik);
+  };
+  const angkatFokus = L.compact ? 14 : 22;
+
   const tapHand = (cardId: string) => {
     if (!canAct) return;
     if (pending === cardId) return setPending(null);
@@ -81,7 +93,7 @@ export function Meja({ w, h, state, seats, humanSeat, penonton = false, canAct, 
       const card = session.hands[seat]![i]!;
       const mine = !penonton && seat === humanSeat;
       const legal = mine && endsFor(card.id).length > 0;
-      const lift = mine ? pending === card.id ? 24 : legal ? 10 : 0 : 0;
+      const lift = mine ? (pending === card.id ? 24 : legal ? 10 : 0) + (fokus.kartu === card.id ? angkatFokus : 0) : 0;
       const motion = presentation?.kind === 'deal'
         ? { key: presentation.key, at: presentation.at, from: center, delay: (i * 4 + pos(seat)) * DURASI.jedaBagi }
         : undefined;
@@ -91,7 +103,9 @@ export function Meja({ w, h, state, seats, humanSeat, penonton = false, canAct, 
         face={mine ? { top: card.a, bottom: card.b } : undefined}
         dim={mine && canAct && !legal}
         outline={mine && pending === card.id}
-        onTap={mine && canAct ? () => tapHand(card.id) : undefined}
+        onPointer={mine ? (tipe, alat) => aksiFokus(tipe === 'lepasDiLuar' ? { tipe, alat } : { tipe, kartu: card.id, alat }) : undefined}
+        bisaDiklik={mine && canAct}
+        halus={mine}
         motion={motion}
       />);
     }
