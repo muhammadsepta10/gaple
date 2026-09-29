@@ -153,3 +153,37 @@ describe('tableLayout: punggung kartu kursi bawah (penonton)', () => {
     }
   });
 });
+
+const LAYAR_HP = [[844, 390], [800, 360], [740, 360], [667, 375], [800, 330], [640, 320]] as const;
+
+describe('tableLayout: layar HP landscape', () => {
+  it('kipas kartu sendiri (termasuk yang terangkat) menutup paling banyak 30% tinggi layar', () => {
+    for (const [w, h] of LAYAR_HP) {
+      const L = tableLayout(w, h);
+      for (let i = 0; i < 7; i++) {
+        const p = L.hand(i, 7, 10);
+        expect(h - (p.y - U * p.scale)).toBeLessThanOrEqual(h * 0.3);
+      }
+    }
+  });
+
+  it('rantai 28 kartu tidak pernah menabrak pil nama pemain mana pun', () => {
+    for (const [w, h] of [...LAYAR_HP, [1440, 900]] as const) {
+      const L = tableLayout(w, h);
+      const pills = ([0, 1, 2, 3] as const).map((seat) => L.pill(seat));
+      for (let seed = 1; seed <= 30; seed++) {
+        const layout = layoutChain(legalChain(seed, 28, seed % 28), L.chainArea, L.chainMaxS);
+        for (const { pose } of layout.poses) {
+          const vertical = pose.rot === 0 || pose.rot === Math.PI;
+          const bw = (vertical ? 1 : 2) * layout.cardWidth;
+          const bh = (vertical ? 2 : 1) * layout.cardWidth;
+          for (const pil of pills) {
+            const overlapX = Math.min(pose.x + bw / 2, pil.x + pil.w) - Math.max(pose.x - bw / 2, pil.x);
+            const overlapY = Math.min(pose.y + bh / 2, pil.y + pil.h) - Math.max(pose.y - bh / 2, pil.y);
+            expect(overlapX > 0.001 && overlapY > 0.001).toBe(false);
+          }
+        }
+      }
+    }
+  });
+});

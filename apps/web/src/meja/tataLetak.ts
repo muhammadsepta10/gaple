@@ -19,18 +19,22 @@ export function tableLayout(w: number, h: number) {
   const m = 8;
   const sideW = clamp(w * 0.11, 78, 140);
   const topH = clamp(h * 0.13, 44, 76);
-  const handH = clamp(h * 0.34, 110, 300);
+  const compact = h < 500;
+  // Di HP landscape tinggi layar sempit: kipas tangan harus hemat agar meja tetap lega.
+  const handH = clamp(h * (compact ? 0.21 : 0.3), 68, 270);
+  const handBottom = compact ? 8 : 17;
   const handScale = handH / (2 * U);
   const backScale = clamp(h / 1300, 0.28, 0.5);
   const tw = U * backScale;
-  const compact = h < 500;
   const pillH = compact ? 30 : 38;
   const pillW = Math.min(136, sideW + 40);
   const sideY = h * 0.28;
+  // Pil kursi samping bisa lebih lebar dari kolom sampingnya; rantai mulai setelah pil agar tidak menabrak nama.
+  const sideCol = Math.max(sideW, pillW + 4);
 
   return {
     compact,
-    chainArea: { x: sideW + m, y: topH + 4, w: w - 2 * (sideW + m), h: h - topH - handH - 20 } as Rect,
+    chainArea: { x: sideCol + m, y: topH + 4, w: w - 2 * (sideCol + m), h: h - topH - handH - handBottom - 12 } as Rect,
     chainMaxS: clamp(h / 16, 18, 34),
     pill(seat: Seat): Rect {
       if (seat === 0) return { x: m, y: h * 0.75, w: pillW, h: pillH };
@@ -43,7 +47,7 @@ export function tableLayout(w: number, h: number) {
       const curve = Math.min(h * 0.095, 62) * (offset / 3) ** 2;
       return {
         x: w / 2 + offset * step,
-        y: h - handH / 2 - 17 + curve - lift,
+        y: h - handH / 2 - handBottom + curve - lift,
         rot: offset * 0.115,
         scale: handScale,
       };
